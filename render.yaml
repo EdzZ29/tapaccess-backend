@@ -1,0 +1,43 @@
+# Render Blueprint for the TapAccess API.
+# New → Blueprint → select this repository. Secrets marked `sync: false` are
+# entered in the dashboard and never committed.
+services:
+  - type: web
+    name: tapaccess-api
+    runtime: node
+    plan: starter # pre-deploy commands need a paid instance; see DEPLOYMENT.md for the free-tier variant
+    region: singapore
+    buildCommand: npm ci && npm run build
+    preDeployCommand: npm run migration:run:prod
+    startCommand: npm run start:prod
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_SSL
+        value: "true"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ANALYTICS_SALT
+        generateValue: true
+      - key: INTERNAL_API_KEY
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: TRUST_PROXY
+        value: "1"
+      - key: STORAGE_DRIVER
+        value: supabase
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_BUCKET
+        value: tapaccess-media
