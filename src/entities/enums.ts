@@ -68,6 +68,16 @@ export enum ClickKind {
   Item = 'item',
 }
 
+/** What happens the moment someone taps the card and the page opens. */
+export enum TapAction {
+  /** Show the profile (default). */
+  Profile = 'profile',
+  /** Open the phone's "add contact" screen straight away. */
+  SaveContact = 'save_contact',
+  /** Offer to call straight away. */
+  Call = 'call',
+}
+
 export enum DeviceType {
   Mobile = 'mobile',
   Tablet = 'tablet',

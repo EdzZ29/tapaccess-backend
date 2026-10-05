@@ -5,6 +5,7 @@ import {
   type NfcCard,
   type SectionItem,
   type SocialLink,
+  TapAction,
 } from '../../entities';
 
 const byPosition = <T extends { position: number }>(a: T, b: T) =>
@@ -14,6 +15,20 @@ const isLive = (item: SectionItem, now: Date) =>
   item.enabled &&
   (!item.startsAt || item.startsAt <= now) &&
   (!item.endsAt || item.endsAt >= now);
+
+/**
+ * Only offer an automatic action the card can actually perform: no phone
+ * number means no automatic call, no contact details means nothing to save.
+ */
+function effectiveTapAction(
+  action: TapAction,
+  p: { phone: string | null; email: string | null; whatsapp: string | null },
+): TapAction {
+  if (action === TapAction.Call && !p.phone) return TapAction.Profile;
+  if (action === TapAction.SaveContact && !p.phone && !p.email && !p.whatsapp)
+    return TapAction.Profile;
+  return action;
+}
 
 /**
  * The only shape that leaves the API for anonymous visitors. Built field by
@@ -58,6 +73,7 @@ export function toPublicProfile(card: NfcCard, now = new Date()) {
     openingHours: p.openingHours,
     hoursNote: p.hoursNote,
     theme,
+    tapAction: effectiveTapAction(p.tapAction, p),
     sections: [...card.sections]
       .filter(showSection)
       .sort(byPosition)

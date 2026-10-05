@@ -41,7 +41,7 @@ import {
   IsSafeLink,
   NormalizeLink,
 } from '../../../common/validators/url.validators';
-import { SectionType, SocialPlatform } from '../../../entities';
+import { SectionType, SocialPlatform, TapAction } from '../../../entities';
 
 const HEX = /^#[0-9a-f]{6}$/i;
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -182,6 +182,11 @@ export class ProfileFieldsDto {
   @ValidateNested()
   @Type(() => ThemeDto)
   theme!: ThemeDto;
+
+  /** What happens when the card is tapped. Optional so older editors keep working. */
+  @IsOptional()
+  @IsEnum(TapAction)
+  tapAction: TapAction = TapAction.Profile;
 }
 
 export class SectionItemDto {

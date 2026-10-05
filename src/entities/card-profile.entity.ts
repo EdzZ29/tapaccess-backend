@@ -8,6 +8,7 @@ import {
   type Relation,
   UpdateDateColumn,
 } from 'typeorm';
+import { TapAction } from './enums';
 import { NfcCard } from './nfc-card.entity';
 import type { OpeningHoursDay, ThemeConfig } from './profile-types';
 
@@ -72,6 +73,14 @@ export class CardProfile {
 
   @Column({ type: 'jsonb' })
   theme!: ThemeConfig;
+
+  @Column({
+    type: 'enum',
+    enum: TapAction,
+    enumName: 'tap_action',
+    default: TapAction.Profile,
+  })
+  tapAction!: TapAction;
 
   @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt!: Date;

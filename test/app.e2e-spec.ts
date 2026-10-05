@@ -461,6 +461,42 @@ describe('TapAccess API (e2e)', () => {
       expect(vcard.trimEnd().endsWith('END:VCARD')).toBe(true);
     });
 
+    it('stores the tap action and only offers a call when there is a phone', async () => {
+      const { body: list } = await authed(
+        request(http).get('/api/admin/cards').query({ search: 'e2e-shop' }),
+      ).expect(200);
+      const { body: card }: { body: { id: string; profile: object } } =
+        await authed(
+          request(http).get(`/api/admin/cards/${list.data[0].id}`),
+        ).expect(200);
+      const save = (profile: object) =>
+        authed(request(http).put(`/api/admin/cards/${card.id}/profile`))
+          .send({ profile, sections: [], buttons: [], socialLinks: [] })
+          .expect(200);
+
+      await save({ ...card.profile, phone: null, tapAction: 'call' });
+      const noPhone = await request(http).get('/api/public/cards/e2e-shop');
+      expect(noPhone.body.tapAction).toBe('profile');
+
+      const saved = await save({
+        ...card.profile,
+        phone: '+1 555 0100',
+        tapAction: 'call',
+      });
+      expect(saved.body.profile.tapAction).toBe('call');
+      const withPhone = await request(http).get('/api/public/cards/e2e-shop');
+      expect(withPhone.body.tapAction).toBe('call');
+
+      await authed(request(http).put(`/api/admin/cards/${card.id}/profile`))
+        .send({
+          profile: { ...card.profile, tapAction: 'explode' },
+          sections: [],
+          buttons: [],
+          socialLinks: [],
+        })
+        .expect(400);
+    });
+
     it('rejects a WhatsApp number without a country code', async () => {
       const { body: list } = await authed(
         request(http).get('/api/admin/cards').query({ search: 'e2e-shop' }),

@@ -90,6 +90,7 @@ export function toCardDetail(card: NfcCard, visitCount = 0) {
       openingHours: p.openingHours,
       hoursNote: p.hoursNote,
       theme: p.theme,
+      tapAction: p.tapAction,
     },
     sections: [...(card.sections ?? [])].sort(byPosition).map(section),
     buttons: [...(card.buttons ?? [])].sort(byPosition).map(button),
