@@ -5,6 +5,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  type OnApplicationBootstrap,
   PayloadTooLargeException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -39,7 +40,7 @@ const ACCEPTED_FORMATS = new Set([
 const MAX_INPUT_PIXELS = 50_000_000;
 
 @Injectable()
-export class MediaService {
+export class MediaService implements OnApplicationBootstrap {
   private readonly logger = new Logger(MediaService.name);
 
   constructor(
@@ -48,6 +49,15 @@ export class MediaService {
     @InjectRepository(NfcCard) private readonly cards: Repository<NfcCard>,
     @Inject(STORAGE_DRIVER) private readonly storage: StorageDriver,
   ) {}
+
+  /** Logs a clear warning at startup if image storage is misconfigured. */
+  onApplicationBootstrap() {
+    if (!this.storage.check || process.env.NODE_ENV === 'test') return;
+    void this.storage.check().then((problem) => {
+      if (problem) this.logger.warn(`Image storage: ${problem}`);
+      else this.logger.log(`Image storage OK (${this.storage.name})`);
+    });
+  }
 
   /**
    * Every upload is decoded and re-encoded to WebP. That verifies it really

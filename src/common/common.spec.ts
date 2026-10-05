@@ -1,6 +1,7 @@
 import { DeviceType } from '../entities/enums';
 import { useSsl } from '../database/data-source-options';
 import { LoginGuard } from '../modules/auth/login-guard';
+import { SupabaseStorageDriver } from '../modules/media/storage/supabase.driver';
 import { buildVCard } from '../modules/public/vcard';
 import type { PublicProfile } from '../modules/public/public-profile.mapper';
 import {
@@ -229,5 +230,70 @@ describe('database TLS detection', () => {
       false,
     );
     expect(useSsl('postgresql://u:p@db.example.com/db', false)).toBe(false);
+  });
+});
+
+describe('SupabaseStorageDriver', () => {
+  const realFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = realFetch;
+  });
+
+  function capture() {
+    const calls: { url: string; headers: Record<string, string> }[] = [];
+    global.fetch = jest.fn((url: string, init: RequestInit) => {
+      calls.push({ url, headers: init.headers as Record<string, string> });
+      return Promise.resolve(
+        new Response(JSON.stringify({ public: true }), { status: 200 }),
+      );
+    });
+    return calls;
+  }
+
+  it('sends new sb_secret keys only as apikey (they are not JWTs)', async () => {
+    const calls = capture();
+    const d = new SupabaseStorageDriver(
+      'https://p.supabase.co/',
+      'sb_secret_abc',
+      'media',
+    );
+    const url = await d.put(
+      'cards/x/logo/1.webp',
+      Buffer.from('x'),
+      'image/webp',
+    );
+    expect(url).toBe(
+      'https://p.supabase.co/storage/v1/object/public/media/cards/x/logo/1.webp',
+    );
+    expect(calls[0].url).toBe(
+      'https://p.supabase.co/storage/v1/object/media/cards/x/logo/1.webp',
+    );
+    expect(calls[0].headers.apikey).toBe('sb_secret_abc');
+    expect(calls[0].headers.Authorization).toBeUndefined();
+  });
+
+  it('sends legacy service_role JWTs as apikey and Bearer token', async () => {
+    const calls = capture();
+    await new SupabaseStorageDriver(
+      'https://p.supabase.co',
+      'eyJhbGciOi.legacy',
+      'media',
+    ).delete('k');
+    expect(calls[0].headers.apikey).toBe('eyJhbGciOi.legacy');
+    expect(calls[0].headers.Authorization).toBe('Bearer eyJhbGciOi.legacy');
+  });
+
+  it('reports a private bucket at startup', async () => {
+    global.fetch = jest.fn(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ public: false }), { status: 200 }),
+      ),
+    );
+    const problem = await new SupabaseStorageDriver(
+      'https://p.supabase.co',
+      'sb_secret_abc',
+      'media',
+    ).check();
+    expect(problem).toMatch(/private/);
   });
 });

@@ -11,4 +11,6 @@ export interface StorageDriver {
   delete(key: string): Promise<void>;
   /** Reads a file back by its public URL, or returns null if it is not ours. */
   readByUrl(url: string): Promise<Buffer | null>;
+  /** Optional startup self-check; returns a problem description or null. */
+  check?(): Promise<string | null>;
 }
