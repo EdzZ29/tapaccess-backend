@@ -17,6 +17,7 @@ import {
   referrerHost,
   userAgent,
 } from '../../common/utils/request-meta';
+import type { InternalRequest } from '../../common/internal-request';
 import type { AppConfig } from '../../config/env';
 import {
   ButtonClick,
@@ -84,6 +85,13 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
+  /** Our own site never counts as a referrer, whichever domain it was opened on. */
+  private ownHostsFor(req: Request): string[] {
+    const site = (req as InternalRequest).trustedSiteUrl;
+    if (!site) return this.ownHosts;
+    return [...this.ownHosts, new URL(site).hostname.replace(/^www\./, '')];
+  }
+
   // ─── Retention ────────────────────────────────────────────────────────────
 
   /**
@@ -147,7 +155,7 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
       cardId: card.id,
       visitorHash,
       deviceType: deviceTypeFromUa(ua),
-      referrerHost: referrerHost(referrer, this.ownHosts),
+      referrerHost: referrerHost(referrer, this.ownHostsFor(req)),
     });
     return { counted: true };
   }

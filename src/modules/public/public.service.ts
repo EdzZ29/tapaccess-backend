@@ -57,7 +57,11 @@ export class PublicService {
     return toPublicProfile(card);
   }
 
-  async getVCard(slug: string): Promise<{ disposition: string; body: string }> {
+  /** `siteUrl`: the address the visitor used, so the card link in the vCard always matches it. */
+  async getVCard(
+    slug: string,
+    siteUrl?: string,
+  ): Promise<{ disposition: string; body: string }> {
     const profile = await this.getProfile(slug);
     let photo: Buffer | null = null;
     if (profile.logoUrl) {
@@ -76,7 +80,11 @@ export class PublicService {
     }
     return {
       disposition: vCardDisposition(profile.businessName),
-      body: buildVCard(profile, `${this.frontendUrl}/c/${profile.slug}`, photo),
+      body: buildVCard(
+        profile,
+        `${siteUrl ?? this.frontendUrl}/c/${profile.slug}`,
+        photo,
+      ),
     };
   }
 }

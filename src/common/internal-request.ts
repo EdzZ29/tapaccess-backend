@@ -17,12 +17,16 @@ import { timingSafeEqual } from 'node:crypto';
  */
 export const INTERNAL_KEY_HEADER = 'x-tapaccess-internal-key';
 export const CLIENT_IP_HEADER = 'x-tapaccess-client-ip';
+/** The site address the visitor actually used (e.g. https://tapaccess.vercel.app). */
+export const SITE_URL_HEADER = 'x-tapaccess-site-url';
 
 export type InternalRequest = Request & {
   /** Sent by our own Next.js server (valid internal key). */
   internal?: boolean;
   /** Visitor IP vouched for by our Next.js server. */
   trustedClientIp?: string;
+  /** Origin of the site the visitor used, vouched for by our Next.js server. */
+  trustedSiteUrl?: string;
 };
 
 function safeEqual(a: string, b: string): boolean {
@@ -39,6 +43,16 @@ export function internalRequests(internalKey: string | undefined) {
       const ip = req.headers[CLIENT_IP_HEADER];
       if (typeof ip === 'string' && isIP(ip.trim()))
         req.trustedClientIp = ip.trim();
+      const site = req.headers[SITE_URL_HEADER];
+      if (typeof site === 'string') {
+        try {
+          const url = new URL(site);
+          if (url.protocol === 'https:' || url.protocol === 'http:')
+            req.trustedSiteUrl = url.origin;
+        } catch {
+          // ignore malformed values
+        }
+      }
     }
     next();
   };

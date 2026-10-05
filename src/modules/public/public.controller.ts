@@ -12,6 +12,7 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
+import type { InternalRequest } from '../../common/internal-request';
 import { TrackClickDto, TrackVisitDto } from '../analytics/analytics.dto';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { SlugParamPipe } from '../../common/validators/slug-param.pipe';
@@ -35,9 +36,13 @@ export class PublicController {
   @Get(':slug/vcard')
   async vcard(
     @Param('slug', SlugParamPipe) slug: string,
+    @Req() req: Request,
     @Res() res: Response,
   ) {
-    const { disposition, body } = await this.publicProfiles.getVCard(slug);
+    const { disposition, body } = await this.publicProfiles.getVCard(
+      slug,
+      (req as InternalRequest).trustedSiteUrl,
+    );
     res
       .status(200)
       .set({
