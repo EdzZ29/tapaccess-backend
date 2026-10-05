@@ -150,22 +150,62 @@ export class EnvironmentVariables {
   MAX_UPLOAD_MB = 8;
 }
 
+/** One-line hints shown when a required variable is missing. */
+const HELP: Record<string, string> = {
+  DATABASE_URL:
+    'PostgreSQL connection string, e.g. Render Postgres "Internal Database URL" or Supabase "Session pooler"',
+  JWT_SECRET: 'any random text of 32+ characters',
+  FRONTEND_URL:
+    'your website address, e.g. https://tapaccess-frontend.vercel.app',
+};
+
 export function validateEnv(raw: Record<string, unknown>) {
   // Accept the common singular spelling too.
-  const config = { ...raw, CORS_ORIGINS: raw.CORS_ORIGINS ?? raw.CORS_ORIGIN };
+  const config: Record<string, unknown> = {
+    ...raw,
+    CORS_ORIGINS: raw.CORS_ORIGINS ?? raw.CORS_ORIGIN,
+  };
   const env = plainToInstance(EnvironmentVariables, config, {
     enableImplicitConversion: false,
     exposeDefaultValues: true,
   });
   const errors = validateSync(env, { skipMissingProperties: false });
+  const isProduction = config.NODE_ENV === NodeEnv.Production;
   if (errors.length > 0) {
-    const details = errors
+    // Separate "not set at all" from "set but wrong" — the first is by far
+    // the most common deploy mistake and deserves a plain-language message.
+    const missing = errors
+      .filter(
+        (e) => config[e.property] === undefined || config[e.property] === '',
+      )
+      .map((e) => e.property);
+    const invalid = errors
+      .filter((e) => !missing.includes(e.property))
       .map(
         (e) =>
           `  - ${e.property}: ${Object.values(e.constraints ?? {}).join(', ')}`,
-      )
-      .join('\n');
-    throw new Error(`Invalid environment configuration:\n${details}`);
+      );
+    throw new Error(
+      [
+        '',
+        'TapAccess API cannot start — environment variables need attention.',
+        ...(missing.length
+          ? [
+              '',
+              'Not set:',
+              ...missing.map(
+                (m) => `  - ${m}  (${HELP[m] ?? 'see .env.example'})`,
+              ),
+            ]
+          : []),
+        ...(invalid.length ? ['', 'Set but invalid:', ...invalid] : []),
+        '',
+        isProduction
+          ? 'On Render: open your service → Environment → add the variables → Save Changes, then Manual Deploy → Deploy latest commit.'
+          : 'Locally: copy .env.example to .env and fill in the values.',
+        '',
+      ].join('\n'),
+    );
   }
   if (
     env.STORAGE_DRIVER === 'supabase' &&
