@@ -1,4 +1,5 @@
 import { DeviceType } from '../entities/enums';
+import { useSsl } from '../database/data-source-options';
 import { LoginGuard } from '../modules/auth/login-guard';
 import { buildVCard } from '../modules/public/vcard';
 import type { PublicProfile } from '../modules/public/public-profile.mapper';
@@ -209,5 +210,24 @@ describe('LoginGuard', () => {
     guard.recordSuccess('a@b.co');
     guard.recordFailure('a@b.co', 20);
     expect(() => guard.assertNotLocked('a@b.co', 21)).not.toThrow();
+  });
+});
+
+describe('database TLS detection', () => {
+  it('uses TLS for hosted databases only', () => {
+    expect(useSsl('postgresql://u:p@localhost:3000/db')).toBe(false);
+    expect(useSsl('postgresql://u:p@dpg-abc123-a/db')).toBe(false); // Render internal
+    expect(
+      useSsl('postgresql://u:p@dpg-abc123-a.singapore-postgres.render.com/db'),
+    ).toBe(true);
+    expect(
+      useSsl(
+        'postgresql://u:p@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres',
+      ),
+    ).toBe(true);
+    expect(useSsl('postgresql://u:p@db.example.com/db?sslmode=disable')).toBe(
+      false,
+    );
+    expect(useSsl('postgresql://u:p@db.example.com/db', false)).toBe(false);
   });
 });

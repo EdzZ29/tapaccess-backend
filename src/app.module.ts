@@ -8,7 +8,7 @@ import {
   ClientIpThrottlerGuard,
   type InternalRequest,
 } from './common/internal-request';
-import { type AppConfig, validateEnv } from './config/env';
+import { type AppConfig, NodeEnv, validateEnv } from './config/env';
 import { buildDataSourceOptions } from './database/data-source-options';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { AdminAuthGuard } from './modules/auth/admin-auth.guard';
@@ -32,6 +32,9 @@ import { PublicModule } from './modules/public/public.module';
           DATABASE_URL: config.get('DATABASE_URL', { infer: true }),
           DATABASE_SSL: config.get('DATABASE_SSL', { infer: true }),
           DATABASE_LOGGING: config.get('DATABASE_LOGGING', { infer: true }),
+          DATABASE_MIGRATE:
+            config.get('DATABASE_MIGRATE', { infer: true }) ??
+            config.get('NODE_ENV', { infer: true }) === NodeEnv.Production,
         }),
     }),
     ThrottlerModule.forRootAsync({

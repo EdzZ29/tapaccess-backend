@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import 'reflect-metadata';
 import { DataSource } from 'typeorm';
-import { buildDataSourceOptions } from './data-source-options';
+import { buildDataSourceOptions, envFlag } from './data-source-options';
 
 /** Entry point for the TypeORM CLI (`npm run migration:*`). */
 if (!process.env.DATABASE_URL) {
@@ -11,8 +11,6 @@ if (!process.env.DATABASE_URL) {
 export default new DataSource(
   buildDataSourceOptions({
     DATABASE_URL: process.env.DATABASE_URL,
-    DATABASE_SSL: ['true', '1'].includes(
-      String(process.env.DATABASE_SSL).toLowerCase(),
-    ),
+    DATABASE_SSL: envFlag(process.env.DATABASE_SSL),
   }),
 );

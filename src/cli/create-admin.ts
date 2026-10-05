@@ -12,7 +12,10 @@ import 'dotenv/config';
 import 'reflect-metadata';
 import { randomBytes } from 'node:crypto';
 import { DataSource } from 'typeorm';
-import { buildDataSourceOptions } from '../database/data-source-options';
+import {
+  buildDataSourceOptions,
+  envFlag,
+} from '../database/data-source-options';
 import { Admin, AdminRole } from '../entities';
 import { hashPassword, PASSWORD_MIN_LENGTH } from '../modules/auth/password';
 
@@ -48,9 +51,9 @@ async function main() {
   const db = await new DataSource(
     buildDataSourceOptions({
       DATABASE_URL: process.env.DATABASE_URL,
-      DATABASE_SSL: ['true', '1'].includes(
-        String(process.env.DATABASE_SSL).toLowerCase(),
-      ),
+      DATABASE_SSL: envFlag(process.env.DATABASE_SSL),
+      // Creates the tables first if this runs before the API's first start.
+      DATABASE_MIGRATE: true,
     }),
   ).initialize();
 

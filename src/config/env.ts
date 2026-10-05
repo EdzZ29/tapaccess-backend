@@ -45,9 +45,17 @@ export class EnvironmentVariables {
   @IsString()
   DATABASE_URL!: string;
 
+  /** Unset = automatic: on for hosted databases, off for localhost and Render's internal host. */
   @Transform(toBool)
+  @IsOptional()
   @IsBoolean()
-  DATABASE_SSL = false;
+  DATABASE_SSL?: boolean;
+
+  /** Apply pending migrations when the API starts. Unset = on in production. */
+  @Transform(toBool)
+  @IsOptional()
+  @IsBoolean()
+  DATABASE_MIGRATE?: boolean;
 
   @Transform(toBool)
   @IsBoolean()
@@ -142,7 +150,9 @@ export class EnvironmentVariables {
   MAX_UPLOAD_MB = 8;
 }
 
-export function validateEnv(config: Record<string, unknown>) {
+export function validateEnv(raw: Record<string, unknown>) {
+  // Accept the common singular spelling too.
+  const config = { ...raw, CORS_ORIGINS: raw.CORS_ORIGINS ?? raw.CORS_ORIGIN };
   const env = plainToInstance(EnvironmentVariables, config, {
     enableImplicitConversion: false,
     exposeDefaultValues: true,
