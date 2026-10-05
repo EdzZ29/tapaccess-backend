@@ -7,7 +7,8 @@ services:
     runtime: node
     plan: starter # pre-deploy commands need a paid instance; see DEPLOYMENT.md for the free-tier variant
     region: singapore
-    buildCommand: npm ci && npm run build
+    # --include=dev: NODE_ENV=production would otherwise skip the build tools (Nest CLI, TypeScript).
+    buildCommand: npm ci --include=dev && npm run build
     preDeployCommand: npm run migration:run:prod
     startCommand: npm run start:prod
     healthCheckPath: /api/health
