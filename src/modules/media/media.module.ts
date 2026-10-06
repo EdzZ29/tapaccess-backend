@@ -24,15 +24,20 @@ import { SupabaseStorageDriver } from './storage/supabase.driver';
           fields: 5,
         },
         // A cheap first filter; the real check is decoding the bytes with sharp.
-        fileFilter: (_req, file, cb) =>
-          /^image\/(jpeg|png|webp|gif|avif|tiff)$/.test(file.mimetype)
-            ? cb(null, true)
-            : cb(
-                new BadRequestException(
-                  'Only JPEG, PNG, WebP, GIF or AVIF images are allowed',
-                ),
-                false,
-              ),
+        fileFilter: (_req, file, cb) => {
+          if (/^image\/(jpeg|png|webp|gif|avif|tiff)$/.test(file.mimetype))
+            return cb(null, true);
+          const heic = /^image\/hei[cf]/.test(file.mimetype);
+          cb(
+            new BadRequestException({
+              message: heic
+                ? 'HEIC photos (the iPhone camera default) are not supported. Export the photo as JPEG — or on the iPhone set Settings → Camera → Formats → Most Compatible.'
+                : `"${file.originalname.slice(0, 80)}" is not a supported image (${file.mimetype || 'unknown type'}). Use JPEG, PNG, WebP, GIF or AVIF.`,
+              code: heic ? 'UNSUPPORTED_HEIC' : 'UNSUPPORTED_TYPE',
+            }),
+            false,
+          );
+        },
       }),
     }),
   ],

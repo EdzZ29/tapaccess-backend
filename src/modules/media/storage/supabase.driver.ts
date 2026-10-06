@@ -1,4 +1,12 @@
-import type { StorageDriver } from './storage.driver';
+import { Logger } from '@nestjs/common';
+import { StorageError, type StorageDriver } from './storage.driver';
+
+interface SupabaseError {
+  statusCode?: string | number;
+  error?: string;
+  message?: string;
+  code?: string;
+}
 
 /**
  * Supabase Storage over its REST API (no SDK needed). The bucket must be
@@ -10,9 +18,13 @@ import type { StorageDriver } from './storage.driver';
  *   turns them into a short-lived service-role token. They are not JWTs, so
  *   they must not be sent as a Bearer token.
  * - legacy `service_role` JWTs (`eyJ…`): sent as `apikey` and Bearer token.
+ *
+ * A missing bucket is created (public) on startup or on the first upload, so
+ * a fresh Supabase project works without a manual step.
  */
 export class SupabaseStorageDriver implements StorageDriver {
   readonly name = 'supabase';
+  private readonly logger = new Logger('SupabaseStorage');
   private readonly base: string;
   private readonly auth: Record<string, string>;
 
@@ -29,25 +41,14 @@ export class SupabaseStorageDriver implements StorageDriver {
   }
 
   async put(key: string, body: Buffer, contentType: string): Promise<string> {
-    const res = await fetch(
-      `${this.base}/storage/v1/object/${this.bucket}/${key}`,
-      {
-        method: 'POST',
-        headers: {
-          ...this.auth,
-          'Content-Type': contentType,
-          'Cache-Control': 'max-age=31536000, immutable',
-          'x-upsert': 'false',
-        },
-        body: new Uint8Array(body),
-        signal: AbortSignal.timeout(30_000),
-      },
-    );
-    if (!res.ok) {
-      throw new Error(
-        `Supabase upload failed (${res.status}): ${await res.text()}`,
-      );
+    let failure = await this.upload(key, body, contentType);
+    if (failure?.reason === 'bucket') {
+      // Fresh project: create the bucket once and try again.
+      const created = await this.ensureBucket();
+      if (created !== true) throw this.bucketError(created);
+      failure = await this.upload(key, body, contentType);
     }
+    if (failure) throw failure;
     return this.publicUrl(key);
   }
 
@@ -71,33 +72,173 @@ export class SupabaseStorageDriver implements StorageDriver {
   }
 
   /**
-   * Startup self-check: is the key accepted, does the bucket exist, and is it
+   * Is the key accepted, does the bucket exist (created if not), and is it
    * public? Returns a human-readable problem, or null when all is well.
    */
   async check(): Promise<string | null> {
+    let res: Response;
     try {
-      const res = await fetch(`${this.base}/storage/v1/bucket/${this.bucket}`, {
+      res = await fetch(`${this.base}/storage/v1/bucket/${this.bucket}`, {
         headers: this.auth,
         signal: AbortSignal.timeout(10_000),
       });
-      if (res.status === 401 || res.status === 403) {
-        return "Supabase rejected SUPABASE_SERVICE_ROLE_KEY. Use the project's secret key (sb_secret_…) or legacy service_role key — not the publishable/anon key.";
-      }
-      if (res.status === 404 || res.status === 400) {
-        return `Supabase bucket "${this.bucket}" not found. Create it in Storage → New bucket (Public bucket: on), or fix SUPABASE_BUCKET.`;
-      }
-      if (!res.ok) return `Supabase storage check failed (${res.status}).`;
-      const bucket = (await res.json()) as { public?: boolean };
-      if (!bucket.public) {
-        return `Supabase bucket "${this.bucket}" is private, so card images won't load. Edit the bucket and turn on "Public bucket".`;
-      }
-      return null;
     } catch (err) {
-      return `Could not reach Supabase at ${this.base} (${(err as Error).message}). Check SUPABASE_URL.`;
+      return this.unreachable(err).message;
     }
+    const error = res.ok ? null : await readError(res);
+    if (res.status === 401 || res.status === 403 || isAuthError(error)) {
+      return AUTH_MESSAGE;
+    }
+    if (!res.ok && isMissingBucket(res.status, error)) {
+      const created = await this.ensureBucket();
+      return created === true ? null : this.bucketError(created).message;
+    }
+    if (!res.ok) {
+      return `Image storage check failed (${res.status}${error?.message ? `: ${error.message}` : ''}).`;
+    }
+    const bucket = (await res.json()) as { public?: boolean };
+    if (!bucket.public) return this.privateMessage();
+    return null;
+  }
+
+  /** Uploads once; returns null on success or the classified failure. */
+  private async upload(
+    key: string,
+    body: Buffer,
+    contentType: string,
+  ): Promise<StorageError | null> {
+    let res: Response;
+    try {
+      res = await fetch(
+        `${this.base}/storage/v1/object/${this.bucket}/${key}`,
+        {
+          method: 'POST',
+          headers: {
+            ...this.auth,
+            'Content-Type': contentType,
+            'Cache-Control': 'max-age=31536000, immutable',
+            'x-upsert': 'false',
+          },
+          body: new Uint8Array(body),
+          signal: AbortSignal.timeout(30_000),
+        },
+      );
+    } catch (err) {
+      return this.unreachable(err);
+    }
+    if (res.ok) return null;
+
+    const error = await readError(res);
+    const detail = `${error?.error ?? ''} ${error?.message ?? ''}`;
+    this.logger.warn(
+      `Upload to "${this.bucket}" failed (${res.status}): ${detail.trim()}`,
+    );
+
+    if (isMissingBucket(res.status, error)) {
+      return new StorageError('bucket', 'Bucket not found');
+    }
+    if (res.status === 401 || res.status === 403 || isAuthError(error)) {
+      return new StorageError('auth', AUTH_MESSAGE);
+    }
+    if (
+      res.status === 413 ||
+      /maximum allowed size|payload too large|entitytoolarge|too large/i.test(
+        detail,
+      )
+    ) {
+      return new StorageError(
+        'too_large',
+        `The image is bigger than the storage bucket's file size limit. In Supabase → Storage → "${this.bucket}" → Edit bucket, raise or remove the upload file size limit.`,
+      );
+    }
+    if (res.status === 415 || /mime/i.test(detail)) {
+      return new StorageError(
+        'mime',
+        `The storage bucket doesn't accept WebP images. In Supabase → Storage → "${this.bucket}" → Edit bucket, add image/webp to "Allowed MIME types" (or turn the restriction off).`,
+      );
+    }
+    return new StorageError(
+      'unknown',
+      `Image storage refused the upload (${res.status}${error?.message ? `: ${error.message}` : ''}). Please try again; if it keeps happening, check the Supabase project status.`,
+    );
+  }
+
+  /** Creates the bucket as public. Returns true, or why it couldn't. */
+  private async ensureBucket(): Promise<true | string> {
+    try {
+      const res = await fetch(`${this.base}/storage/v1/bucket`, {
+        method: 'POST',
+        headers: { ...this.auth, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: this.bucket,
+          name: this.bucket,
+          public: true,
+        }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (res.ok) {
+        this.logger.log(`Created public storage bucket "${this.bucket}"`);
+        return true;
+      }
+      const error = await readError(res);
+      if (res.status === 409 || /already exists/i.test(error?.message ?? ''))
+        return true;
+      if (res.status === 401 || res.status === 403 || isAuthError(error))
+        return 'the server key is not allowed to create buckets';
+      return `${res.status}${error?.message ? `: ${error.message}` : ''}`;
+    } catch (err) {
+      return (err as Error).message;
+    }
+  }
+
+  private bucketError(why: string): StorageError {
+    return new StorageError(
+      'bucket',
+      `The image storage bucket "${this.bucket}" doesn't exist and couldn't be created automatically (${why}). In Supabase → Storage, create a public bucket named "${this.bucket}", or set SUPABASE_BUCKET on Render to your bucket's name.`,
+    );
+  }
+
+  private privateMessage(): string {
+    return `The storage bucket "${this.bucket}" is private, so uploaded images can't be shown. In Supabase → Storage → "${this.bucket}" → Edit bucket, turn on "Public bucket".`;
+  }
+
+  private unreachable(err: unknown): StorageError {
+    const timeout = (err as Error)?.name === 'TimeoutError';
+    return new StorageError(
+      'unreachable',
+      timeout
+        ? 'Image storage (Supabase) took too long to answer. Please try again.'
+        : `Couldn't reach image storage at ${this.base}. Check SUPABASE_URL on Render, or try again in a moment.`,
+    );
   }
 
   private publicUrl(key: string): string {
     return `${this.base}/storage/v1/object/public/${this.bucket}/${key}`;
   }
+}
+
+const AUTH_MESSAGE =
+  "Image storage rejected the server's key. On Render, set SUPABASE_SERVICE_ROLE_KEY to the Supabase project's secret key (sb_secret_…) or legacy service_role key — not the publishable/anon key.";
+
+async function readError(res: Response): Promise<SupabaseError | null> {
+  try {
+    return (await res.json()) as SupabaseError;
+  } catch {
+    return null;
+  }
+}
+
+/** Supabase reports a missing bucket as 404, or as 400 with "Bucket not found". */
+function isMissingBucket(status: number, error: SupabaseError | null) {
+  return (
+    error?.code === 'NoSuchBucket' ||
+    /bucket not found/i.test(`${error?.error ?? ''} ${error?.message ?? ''}`) ||
+    (status === 404 && !error)
+  );
+}
+
+function isAuthError(error: SupabaseError | null) {
+  return /unauthorized|invalid (jwt|signature|api key)|row-level security|jws/i.test(
+    `${error?.error ?? ''} ${error?.message ?? ''}`,
+  );
 }

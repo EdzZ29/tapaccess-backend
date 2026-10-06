@@ -35,6 +35,12 @@ export class MediaController {
     return this.media.upload(file, dto.kind, dto.cardId);
   }
 
+  /** Whether image storage works, so the editor can warn before an upload fails. */
+  @Get('status')
+  status() {
+    return this.media.status();
+  }
+
   @Get()
   list(@Query() query: ListMediaQueryDto) {
     return this.media.list(query);

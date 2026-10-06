@@ -3,6 +3,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { getDataSourceToken } from '@nestjs/typeorm';
 import { Client } from 'pg';
+import sharp from 'sharp';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { DataSource } from 'typeorm';
@@ -495,6 +496,46 @@ describe('TapAccess API (e2e)', () => {
           socialLinks: [],
         })
         .expect(400);
+    });
+
+    it('uploads AVIF and explains every rejected file', async () => {
+      const upload = (buf: Buffer, name: string, type: string) =>
+        authed(request(http).post('/api/admin/media'))
+          .field('kind', 'logo')
+          .attach('file', buf, { filename: name, contentType: type });
+      const pixel = sharp({
+        create: {
+          width: 64,
+          height: 64,
+          channels: 3,
+          background: '#4f46e5',
+        },
+      });
+
+      const avif = await upload(
+        await pixel.clone().avif().toBuffer(),
+        'logo.avif',
+        'image/avif',
+      ).expect(201);
+      expect(avif.body).toMatchObject({ width: 64, mimeType: 'image/webp' });
+
+      const empty = await upload(Buffer.alloc(0), 'e.png', 'image/png');
+      expect(empty.status).toBe(400);
+      expect(empty.body.code).toBe('EMPTY_FILE');
+
+      const broken = await upload(Buffer.from('nope'), 'x.png', 'image/png');
+      expect(broken.body).toMatchObject({ code: 'INVALID_IMAGE' });
+
+      const pdf = await upload(Buffer.from('%PDF'), 'a.pdf', 'application/pdf');
+      expect(pdf.body.message).toMatch(/"a\.pdf" is not a supported image/);
+
+      const heic = await upload(Buffer.from('x'), 'IMG_1.HEIC', 'image/heic');
+      expect(heic.body.code).toBe('UNSUPPORTED_HEIC');
+
+      const status = await authed(
+        request(http).get('/api/admin/media/status'),
+      ).expect(200);
+      expect(status.body).toEqual({ provider: 'local', problem: null });
     });
 
     it('rejects a WhatsApp number without a country code', async () => {

@@ -66,6 +66,17 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
+      // Multer's own wording is terse; uploads are images.
+      if (status === 413 && exception.message === 'File too large') {
+        return {
+          ...base,
+          statusCode: 413,
+          error: 'Payload Too Large',
+          message:
+            'This image is larger than the upload limit. Choose a smaller photo.',
+          code: 'FILE_TOO_LARGE',
+        };
+      }
       const response = exception.getResponse();
       if (typeof response === 'string') {
         return {

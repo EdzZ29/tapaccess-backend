@@ -1,6 +1,6 @@
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
-import type { StorageDriver } from './storage.driver';
+import { StorageError, type StorageDriver } from './storage.driver';
 
 /**
  * Writes files to disk; `main.ts` serves them under `/uploads`. Intended for
@@ -19,8 +19,18 @@ export class LocalStorageDriver implements StorageDriver {
 
   async put(key: string, body: Buffer): Promise<string> {
     const path = this.pathFor(key);
-    await mkdir(dirname(path), { recursive: true });
-    await writeFile(path, body);
+    try {
+      await mkdir(dirname(path), { recursive: true });
+      await writeFile(path, body);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code ?? 'error';
+      throw new StorageError(
+        code === 'ENOSPC' ? 'too_large' : 'unknown',
+        code === 'ENOSPC'
+          ? 'The server is out of disk space for images.'
+          : `The server couldn't save the image to UPLOAD_DIR (${code}). Check that the folder exists and is writable.`,
+      );
+    }
     return `${this.baseUrl.replace(/\/$/, '')}/${key}`;
   }
 
