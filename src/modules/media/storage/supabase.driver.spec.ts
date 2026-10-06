@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { StorageError } from './storage.driver';
-import { SupabaseStorageDriver } from './supabase.driver';
+import { normalizeSupabaseUrl, SupabaseStorageDriver } from './supabase.driver';
 
 type Handler = (url: string, init: RequestInit) => Response | Promise<Response>;
 
@@ -135,6 +135,50 @@ describe('SupabaseStorageDriver', () => {
     expect(err.reason).toBe(reason);
     expect(err.message).toMatch(message);
     expect(err.message).not.toContain('sb_secret_test');
+  });
+
+  it('explains the gateway "Invalid path" answer as a SUPABASE_URL problem', async () => {
+    mockFetch(() =>
+      json(404, { message: 'Invalid path specified in request URL' }),
+    );
+    const err = await putError();
+    expect(err.reason).toBe('url');
+    expect(err.message).toMatch(/SUPABASE_URL/);
+    await expect(driver.check()).resolves.toMatch(/SUPABASE_URL/);
+  });
+
+  it.each([
+    ['https://abcdefghijklmnopqrst.supabase.co', null],
+    ['https://abcdefghijklmnopqrst.supabase.co/', null],
+    ['https://abcdefghijklmnopqrst.supabase.co/rest/v1/', 'changed'],
+    ['https://abcdefghijklmnopqrst.supabase.co/storage/v1/s3', 'changed'],
+    [
+      'https://supabase.com/dashboard/project/abcdefghijklmnopqrst/settings/api',
+      'changed',
+    ],
+    ['https://db.abcdefghijklmnopqrst.supabase.co', 'changed'],
+    ['  https://abcdefghijklmnopqrst.supabase.co  ', null],
+  ])('normalizes SUPABASE_URL %s', (raw, note) => {
+    const result = normalizeSupabaseUrl(raw);
+    expect(result.base).toBe('https://abcdefghijklmnopqrst.supabase.co');
+    expect(result.note === null ? null : 'changed').toBe(note);
+  });
+
+  it('uses only the project root and a clean bucket name in requests', async () => {
+    const messy = new SupabaseStorageDriver(
+      'https://abcdefghijklmnopqrst.supabase.co/rest/v1/',
+      'sb_secret_test',
+      ' /tapaccess-media/ ',
+    );
+    mockFetch(() => json(200, {}));
+    await expect(
+      messy.put('a.webp', Buffer.from('x'), 'image/webp'),
+    ).resolves.toBe(
+      'https://abcdefghijklmnopqrst.supabase.co/storage/v1/object/public/tapaccess-media/a.webp',
+    );
+    expect(calls[0].url).toBe(
+      'https://abcdefghijklmnopqrst.supabase.co/storage/v1/object/tapaccess-media/a.webp',
+    );
   });
 
   it('reports an unreachable Supabase without crashing', async () => {

@@ -22,6 +22,7 @@ export type StorageFailure =
   | 'too_large'
   | 'mime'
   | 'unreachable'
+  | 'url'
   | 'unknown';
 
 /**

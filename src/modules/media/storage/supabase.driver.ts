@@ -28,12 +28,16 @@ export class SupabaseStorageDriver implements StorageDriver {
   private readonly base: string;
   private readonly auth: Record<string, string>;
 
-  constructor(
-    supabaseUrl: string,
-    serviceKey: string,
-    private readonly bucket: string,
-  ) {
-    this.base = supabaseUrl.replace(/\/$/, '');
+  private readonly bucket: string;
+
+  constructor(supabaseUrl: string, serviceKey: string, bucket: string) {
+    const { base, note } = normalizeSupabaseUrl(supabaseUrl);
+    this.base = base;
+    if (note) this.logger.warn(note);
+    this.bucket = bucket.trim().replace(/^\/+|\/+$/g, '');
+    this.logger.log(
+      `Storage: ${this.base}/storage/v1, bucket "${this.bucket}"`,
+    );
     const key = serviceKey.trim();
     this.auth = key.startsWith('sb_')
       ? { apikey: key }
@@ -86,6 +90,7 @@ export class SupabaseStorageDriver implements StorageDriver {
       return this.unreachable(err).message;
     }
     const error = res.ok ? null : await readError(res);
+    if (isInvalidPath(error)) return this.urlMessage();
     if (res.status === 401 || res.status === 403 || isAuthError(error)) {
       return AUTH_MESSAGE;
     }
@@ -134,6 +139,9 @@ export class SupabaseStorageDriver implements StorageDriver {
       `Upload to "${this.bucket}" failed (${res.status}): ${detail.trim()}`,
     );
 
+    if (isInvalidPath(error)) {
+      return new StorageError('url', this.urlMessage());
+    }
     if (isMissingBucket(res.status, error)) {
       return new StorageError('bucket', 'Bucket not found');
     }
@@ -198,6 +206,10 @@ export class SupabaseStorageDriver implements StorageDriver {
     );
   }
 
+  private urlMessage(): string {
+    return `Supabase didn't recognise the storage address ${this.base}/storage/v1. On Render, set SUPABASE_URL to your project URL exactly as shown in Supabase → Project Settings → Data API (https://<project-id>.supabase.co, nothing after it), and SUPABASE_BUCKET to the bucket name only.`;
+  }
+
   private privateMessage(): string {
     return `The storage bucket "${this.bucket}" is private, so uploaded images can't be shown. In Supabase → Storage → "${this.bucket}" → Edit bucket, turn on "Public bucket".`;
   }
@@ -216,6 +228,47 @@ export class SupabaseStorageDriver implements StorageDriver {
     return `${this.base}/storage/v1/object/public/${this.bucket}/${key}`;
   }
 }
+
+/**
+ * The storage API lives at the project root (https://<ref>.supabase.co), but
+ * it's easy to paste a longer address: the "RESTful endpoint" (…/rest/v1),
+ * the S3 endpoint, a dashboard link or the database host. Reduce any of
+ * those to the project root, and say so in the log.
+ */
+export function normalizeSupabaseUrl(raw: string): {
+  base: string;
+  note: string | null;
+} {
+  const input = raw.trim();
+  let url: URL;
+  try {
+    url = new URL(input);
+  } catch {
+    return { base: input.replace(/\/+$/, ''), note: null };
+  }
+  let host = url.host;
+  // Dashboard link: https://supabase.com/dashboard/project/<ref>/…
+  const dashboard = /\/project\/([a-z0-9]{20})(?:\/|$)/.exec(url.pathname);
+  if (/(^|\.)supabase\.com$/.test(url.hostname) && dashboard) {
+    host = `${dashboard[1]}.supabase.co`;
+  }
+  // Database host: db.<ref>.supabase.co
+  host = host.replace(/^db\.([a-z0-9]{20}\.supabase\.co)$/, '$1');
+  const base = `${url.protocol}//${host}`;
+  const changed = base !== input.replace(/\/+$/, '');
+  return {
+    base,
+    note: changed
+      ? `SUPABASE_URL should be just the project address; using ${base} (you set "${input}").`
+      : null,
+  };
+}
+
+/** The Supabase gateway's answer when a request path doesn't exist. */
+const isInvalidPath = (error: SupabaseError | null) =>
+  /invalid path specified/i.test(
+    `${error?.message ?? ''} ${error?.error ?? ''}`,
+  );
 
 const AUTH_MESSAGE =
   "Image storage rejected the server's key. On Render, set SUPABASE_SERVICE_ROLE_KEY to the Supabase project's secret key (sb_secret_…) or legacy service_role key — not the publishable/anon key.";
