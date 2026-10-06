@@ -1,3 +1,4 @@
+import { ownerAccessActive } from '../../common/plans';
 import type {
   CardButton,
   CardSection,
@@ -23,6 +24,12 @@ export function toCardSummary(card: NfcCard, visitCount = 0) {
     slugLocked: card.firstActivatedAt !== null,
     firstActivatedAt: card.firstActivatedAt,
     archivedAt: card.archivedAt,
+    ownerAccess: {
+      enabled: card.ownerAccess,
+      active: ownerAccessActive(card),
+      codeSetAt: card.ownerCodeSetAt,
+      lastEditAt: card.ownerLastEditAt,
+    },
     createdAt: card.createdAt,
     updatedAt: card.updatedAt,
     visitCount,
@@ -99,3 +106,20 @@ export function toCardDetail(card: NfcCard, visitCount = 0) {
 }
 
 export type CardDetail = ReturnType<typeof toCardDetail>;
+
+/**
+ * What a card's owner sees in their self-service editor: only the parts
+ * they may change, plus enough context to show which card it is.
+ */
+export function toOwnerView(card: NfcCard) {
+  return {
+    slug: card.slug,
+    businessName: card.profile?.businessName ?? '',
+    plan: card.plan,
+    lastEditAt: card.ownerLastEditAt,
+    buttons: [...(card.buttons ?? [])].sort(byPosition).map(button),
+    socialLinks: [...(card.socialLinks ?? [])].sort(byPosition).map(social),
+  };
+}
+
+export type OwnerView = ReturnType<typeof toOwnerView>;

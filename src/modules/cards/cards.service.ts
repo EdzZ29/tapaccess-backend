@@ -5,8 +5,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { Brackets, DataSource, EntityManager, Repository } from 'typeorm';
+import { Brackets, DataSource, EntityManager, In, Repository } from 'typeorm';
 import { paginate } from '../../common/dto/pagination.dto';
+import { ownerAccessAllowed } from '../../common/plans';
+import {
+  generateOwnerCode,
+  normalizeOwnerCode,
+} from '../../common/utils/owner-code';
 import { slugProblem } from '../../common/utils/slug';
 import {
   CardButton,
@@ -20,17 +25,20 @@ import {
   ITEM_SECTION_TYPES,
   NfcCard,
   SectionItem,
+  SectionType,
   SocialLink,
 } from '../../entities';
+import { hashPassword } from '../auth/password';
 import { MediaService } from '../media/media.service';
 import { DEFAULT_SECTIONS } from './card-defaults';
-import { toCardDetail, toCardSummary } from './card.mapper';
+import { toCardDetail, toCardSummary, toOwnerView } from './card.mapper';
 import {
   CreateCardDto,
   DuplicateCardDto,
   ListCardsQueryDto,
   UpdateCardDto,
 } from './dto/card.dto';
+import { SaveOwnerLinksDto } from './dto/owner.dto';
 import { SaveProfileDto } from './dto/profile.dto';
 
 const FULL_RELATIONS = {
@@ -326,6 +334,20 @@ export class CardsService {
   async saveProfile(id: string, dto: SaveProfileDto) {
     const card = await this.findFull(id);
     this.assertUniqueSectionTypes(dto);
+    // The editor saves buttons and links too, so it must not silently undo
+    // changes the card's owner made after the editor was opened.
+    if (
+      dto.baseOwnerEditAt !== undefined &&
+      card.ownerLastEditAt &&
+      (dto.baseOwnerEditAt === null ||
+        card.ownerLastEditAt.getTime() !== dto.baseOwnerEditAt.getTime())
+    ) {
+      throw new ConflictException({
+        message:
+          'The card owner changed their buttons or social links after you opened this editor. Reload the editor to see their changes, then make your edits again.',
+        code: 'OWNER_EDITED',
+      });
+    }
 
     await this.db.transaction(async (m) => {
       await m.update(
@@ -405,6 +427,93 @@ export class CardsService {
     });
 
     return this.get(id);
+  }
+
+  // ─── Owner access (Business) ──────────────────────────────────────────────
+
+  /**
+   * Turns owner access on (or issues a new code) and returns the code once.
+   * A new code signs the owner out of any existing session.
+   */
+  async issueOwnerCode(id: string) {
+    const card = await this.findOrFail(id);
+    if (!ownerAccessAllowed(card.plan)) {
+      throw new BadRequestException({
+        message:
+          'Owner access is part of the Business package. Switch this card to Business first.',
+        code: 'OWNER_ACCESS_BUSINESS_ONLY',
+      });
+    }
+    if (card.status === CardStatus.Archived) {
+      throw new BadRequestException({
+        message: 'Restore this card before giving its owner access.',
+        code: 'CARD_ARCHIVED',
+      });
+    }
+    const code = generateOwnerCode();
+    await this.cards.update(id, {
+      ownerAccess: true,
+      ownerCodeHash: await hashPassword(normalizeOwnerCode(code)),
+      ownerCodeSetAt: new Date(),
+      ownerTokenVersion: card.ownerTokenVersion + 1,
+    });
+    return { ...(await this.get(id)), ownerCode: code };
+  }
+
+  /** Turns owner access off, forgets the code and signs the owner out. */
+  async revokeOwnerAccess(id: string) {
+    const card = await this.findOrFail(id);
+    await this.cards.update(id, {
+      ownerAccess: false,
+      ownerCodeHash: null,
+      ownerCodeSetAt: null,
+      ownerTokenVersion: card.ownerTokenVersion + 1,
+    });
+    return this.get(id);
+  }
+
+  async ownerView(id: string) {
+    return toOwnerView(await this.findFull(id));
+  }
+
+  /**
+   * The owner's save: replaces only the card's CTA buttons and social links
+   * (row ids kept, so click stats survive). The matching sections are
+   * switched on when there's something to show, so the owner's links
+   * actually appear.
+   */
+  async saveOwnerLinks(id: string, dto: SaveOwnerLinksDto) {
+    const card = await this.findFull(id);
+    await this.db.transaction(async (m) => {
+      await this.syncRows(
+        m,
+        CardButton,
+        card.buttons,
+        dto.buttons,
+        (row, position) => ({ ...row, cardId: id, position }),
+      );
+      await this.syncRows(
+        m,
+        SocialLink,
+        card.socialLinks,
+        dto.socialLinks,
+        (row, position) => ({ ...row, cardId: id, position }),
+      );
+      const show = [
+        ...(dto.buttons.some((b) => b.enabled) ? [SectionType.Actions] : []),
+        ...(dto.socialLinks.some((l) => l.enabled) ? [SectionType.Social] : []),
+      ];
+      if (show.length) {
+        await m.update(
+          CardSection,
+          { cardId: id, type: In(show) },
+          { enabled: true },
+        );
+      }
+      const now = new Date();
+      await m.update(NfcCard, { id }, { updatedAt: now, ownerLastEditAt: now });
+    });
+    return this.ownerView(id);
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────

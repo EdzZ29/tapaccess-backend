@@ -47,3 +47,23 @@ export const PLAN_FEATURES: Record<CardPlan, PlanFeatures> = {
     alwaysOn: [],
   },
 };
+
+/** Owner self-editing (CTA buttons + social links) is a Business feature. */
+export const ownerAccessAllowed = (plan: CardPlan) =>
+  plan === CardPlan.Business;
+
+/**
+ * Whether the card's owner can sign in and edit right now: switched on by
+ * the admin, a code has been issued, the card is on Business and not
+ * archived. Downgrading to Starter pauses access without forgetting it.
+ */
+export const ownerAccessActive = (card: {
+  ownerAccess: boolean;
+  ownerCodeSetAt: Date | null;
+  plan: CardPlan;
+  status: string;
+}) =>
+  card.ownerAccess &&
+  card.ownerCodeSetAt !== null &&
+  ownerAccessAllowed(card.plan) &&
+  card.status !== 'archived';

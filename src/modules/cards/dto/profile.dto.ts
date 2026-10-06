@@ -321,6 +321,17 @@ export class SocialLinkDto {
  * and rows missing from the payload are deleted.
  */
 export class SaveProfileDto {
+  /**
+   * The owner's last edit time as the editor loaded it (`ownerAccess.lastEditAt`,
+   * null if there was none). If the owner has edited since, the save is
+   * refused instead of silently overwriting their links. Omit for older
+   * clients. Compared with the same column, so clock skew can't interfere.
+   */
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  baseOwnerEditAt?: Date | null;
+
   @ValidateNested()
   @Type(() => ProfileFieldsDto)
   profile!: ProfileFieldsDto;

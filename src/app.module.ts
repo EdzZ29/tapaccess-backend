@@ -16,6 +16,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { CardsModule } from './modules/cards/cards.module';
 import { HealthController } from './modules/health/health.controller';
 import { MediaModule } from './modules/media/media.module';
+import { OwnerModule } from './modules/owner/owner.module';
 import { PublicModule } from './modules/public/public.module';
 
 @Module({
@@ -61,6 +62,7 @@ import { PublicModule } from './modules/public/public.module';
     CardsModule,
     AnalyticsModule,
     PublicModule,
+    OwnerModule,
   ],
   controllers: [HealthController],
   providers: [

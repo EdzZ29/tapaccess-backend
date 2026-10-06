@@ -558,4 +558,248 @@ describe('TapAccess API (e2e)', () => {
       expect(res.body.message).toMatch(/country code/);
     });
   });
+
+  describe('owner access (Business)', () => {
+    let cardId: string;
+    let ownerCookie: string;
+    let code: string;
+    const ownerCookieFrom = (res: request.Response) => {
+      const set = ([] as string[])
+        .concat(res.headers['set-cookie'] ?? [])
+        .find((c) => c.includes('_owner='));
+      expect(set).toMatch(/HttpOnly/);
+      return set!.split(';')[0];
+    };
+    const link = (label: string, url: string, id?: string) => ({
+      ...(id ? { id } : {}),
+      label,
+      url,
+      icon: 'link',
+      enabled: true,
+      highlighted: false,
+    });
+
+    it('is only for Business cards', async () => {
+      const starter = await authed(request(http).post('/api/admin/cards'))
+        .send({
+          businessName: 'Starter Owner',
+          slug: 'e2e-owner-starter',
+          plan: 'starter',
+        })
+        .expect(201);
+      const res = await authed(
+        request(http).post(`/api/admin/cards/${starter.body.id}/owner-access`),
+      ).expect(400);
+      expect(res.body.code).toBe('OWNER_ACCESS_BUSINESS_ONLY');
+    });
+
+    it('issues a one-time code and shows the edit button publicly', async () => {
+      const created = await authed(request(http).post('/api/admin/cards'))
+        .send({
+          businessName: 'Owner Shop',
+          slug: 'e2e-owner',
+          plan: 'business',
+        })
+        .expect(201);
+      cardId = created.body.id;
+      await authed(request(http).patch(`/api/admin/cards/${cardId}/status`))
+        .send({ status: 'active' })
+        .expect(200);
+
+      const res = await authed(
+        request(http).post(`/api/admin/cards/${cardId}/owner-access`),
+      ).expect(201);
+      code = res.body.ownerCode;
+      expect(code).toMatch(/^[A-HJ-NP-Z2-9]{5}-[A-HJ-NP-Z2-9]{5}$/);
+      expect(res.body.slug).toBe('e2e-owner');
+      expect(res.body.ownerAccess).toMatchObject({
+        enabled: true,
+        active: true,
+      });
+
+      const detail = await authed(
+        request(http).get(`/api/admin/cards/${cardId}`),
+      );
+      expect(JSON.stringify(detail.body)).not.toContain(code);
+      const pub = await request(http)
+        .get('/api/public/cards/e2e-owner')
+        .expect(200);
+      expect(pub.body.ownerEditing).toBe(true);
+    });
+
+    it('signs the owner in with the code (case and dashes ignored)', async () => {
+      const wrong = await request(http)
+        .post('/api/owner/login')
+        .send({ slug: 'e2e-owner', code: 'AAAAA-BBBBB' })
+        .expect(401);
+      expect(wrong.body.code).toBe('OWNER_LOGIN_FAILED');
+      // The right code for a different card doesn't work.
+      await request(http)
+        .post('/api/owner/login')
+        .send({ slug: 'e2e-owner-starter', code })
+        .expect(401);
+
+      const res = await request(http)
+        .post('/api/owner/login')
+        .send({ slug: 'e2e-owner', code: code.toLowerCase().replace('-', ' ') })
+        .expect(200);
+      ownerCookie = ownerCookieFrom(res);
+      expect(res.body).toMatchObject({
+        slug: 'e2e-owner',
+        businessName: 'Owner Shop',
+      });
+      expect(res.body).not.toHaveProperty('notes');
+    });
+
+    it('lets the owner edit only buttons and social links', async () => {
+      const sneaky = await request(http)
+        .put('/api/owner/card')
+        .set('Cookie', ownerCookie)
+        .send({
+          buttons: [],
+          socialLinks: [],
+          profile: { businessName: 'Hacked' },
+        })
+        .expect(400); // unknown fields are rejected outright
+      expect(sneaky.body.message).toMatch(/profile/);
+
+      const ok = await request(http)
+        .put('/api/owner/card')
+        .set('Cookie', ownerCookie)
+        .send({
+          buttons: [link('Book now', 'https://book.example')],
+          socialLinks: [
+            {
+              platform: 'instagram',
+              url: 'https://instagram.com/owner',
+              enabled: true,
+            },
+          ],
+        })
+        .expect(200);
+      expect(ok.body.buttons).toHaveLength(1);
+      expect(ok.body.lastEditAt).toBeTruthy();
+
+      const pub = await request(http)
+        .get('/api/public/cards/e2e-owner')
+        .expect(200);
+      expect(pub.body.businessName).toBe('Owner Shop');
+      expect(pub.body.buttons.map((b: { label: string }) => b.label)).toEqual([
+        'Book now',
+      ]);
+      expect(pub.body.socialLinks[0].url).toBe('https://instagram.com/owner');
+
+      // Unsafe links are refused…
+      await request(http)
+        .put('/api/owner/card')
+        .set('Cookie', ownerCookie)
+        .send({ buttons: [link('x', 'javascript:alert(1)')], socialLinks: [] })
+        .expect(400);
+      // …and so are rows that belong to another card.
+      const { body: list } = await authed(
+        request(http).get('/api/admin/cards').query({ search: 'e2e-shop' }),
+      );
+      const { body: other } = await authed(
+        request(http).get(`/api/admin/cards/${list.data[0].id}`),
+      );
+      await authed(request(http).put(`/api/admin/cards/${other.id}/profile`))
+        .send({
+          profile: other.profile,
+          sections: [],
+          buttons: [link('Theirs', 'https://theirs.example')],
+          socialLinks: [],
+        })
+        .expect(200);
+      const { body: otherAfter } = await authed(
+        request(http).get(`/api/admin/cards/${other.id}`),
+      );
+      await request(http)
+        .put('/api/owner/card')
+        .set('Cookie', ownerCookie)
+        .send({
+          buttons: [
+            link('x', 'https://x.example', otherAfter.buttons[0].id as string),
+          ],
+          socialLinks: [],
+        })
+        .expect(400);
+    });
+
+    it('keeps owner and admin sessions apart', async () => {
+      const ownerToken = ownerCookie.split('=')[1];
+      const adminName = cookie.split('=')[0];
+      await request(http)
+        .get('/api/admin/cards')
+        .set('Cookie', `${adminName}=${ownerToken}`)
+        .expect(401);
+      await request(http)
+        .get('/api/owner/card')
+        .set('Cookie', cookie)
+        .expect(401);
+    });
+
+    it('stops the admin editor from overwriting newer owner edits', async () => {
+      const { body: card } = await authed(
+        request(http).get(`/api/admin/cards/${cardId}`),
+      );
+      // An editor opened before the owner's edit (no owner edit seen yet).
+      for (const stale of [null, '2020-01-01T00:00:00.000Z']) {
+        const res = await authed(
+          request(http).put(`/api/admin/cards/${cardId}/profile`),
+        )
+          .send({
+            baseOwnerEditAt: stale,
+            profile: card.profile,
+            sections: [],
+            buttons: [],
+            socialLinks: [],
+          })
+          .expect(409);
+        expect(res.body.code).toBe('OWNER_EDITED');
+      }
+      // An editor that has seen the owner's latest edit saves normally.
+      await authed(request(http).put(`/api/admin/cards/${cardId}/profile`))
+        .send({
+          baseOwnerEditAt: card.ownerAccess.lastEditAt,
+          profile: card.profile,
+          sections: [],
+          buttons: card.buttons,
+          socialLinks: card.socialLinks,
+        })
+        .expect(200);
+    });
+
+    it('a new code or switching off ends the owner session', async () => {
+      const fresh = await authed(
+        request(http).post(`/api/admin/cards/${cardId}/owner-access`),
+      ).expect(201);
+      expect(fresh.body.ownerCode).not.toBe(code);
+      const ended = await request(http)
+        .get('/api/owner/card')
+        .set('Cookie', ownerCookie)
+        .expect(401);
+      expect(ended.body.code).toBe('OWNER_SESSION_ENDED');
+      await request(http)
+        .post('/api/owner/login')
+        .send({ slug: 'e2e-owner', code })
+        .expect(401);
+
+      const again = await request(http)
+        .post('/api/owner/login')
+        .send({ slug: 'e2e-owner', code: fresh.body.ownerCode })
+        .expect(200);
+      const second = ownerCookieFrom(again);
+      await authed(
+        request(http).delete(`/api/admin/cards/${cardId}/owner-access`),
+      ).expect(200);
+      await request(http)
+        .get('/api/owner/card')
+        .set('Cookie', second)
+        .expect(401);
+      const pub = await request(http)
+        .get('/api/public/cards/e2e-owner')
+        .expect(200);
+      expect(pub.body.ownerEditing).toBe(false);
+    });
+  });
 });

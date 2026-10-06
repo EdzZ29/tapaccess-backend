@@ -1,4 +1,4 @@
-import { PLAN_FEATURES } from '../../common/plans';
+import { ownerAccessActive, PLAN_FEATURES } from '../../common/plans';
 import {
   type CardSection,
   ITEM_SECTION_TYPES,
@@ -74,6 +74,8 @@ export function toPublicProfile(card: NfcCard, now = new Date()) {
     hoursNote: p.hoursNote,
     theme,
     tapAction: effectiveTapAction(p.tapAction, p),
+    /** Shows the owner's "Edit my links" button. */
+    ownerEditing: ownerAccessActive(card),
     sections: [...card.sections]
       .filter(showSection)
       .sort(byPosition)

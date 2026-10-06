@@ -63,6 +63,28 @@ export class NfcCard {
   @Column({ type: 'timestamptz', nullable: true })
   archivedAt!: Date | null;
 
+  /**
+   * Owner access (Business package): the card's owner may edit their own
+   * CTA buttons and social links after signing in with an access code the
+   * admin gives them. Only effective while the card is on Business.
+   */
+  @Column({ type: 'boolean', default: false })
+  ownerAccess!: boolean;
+
+  /** scrypt hash of the owner's access code; never selected by default. */
+  @Column({ type: 'varchar', length: 255, nullable: true, select: false })
+  ownerCodeHash!: string | null;
+
+  /** Bumped on every new code or switch-off, which signs the owner out. */
+  @Column({ type: 'int', default: 0 })
+  ownerTokenVersion!: number;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  ownerCodeSetAt!: Date | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  ownerLastEditAt!: Date | null;
+
   @Index()
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
