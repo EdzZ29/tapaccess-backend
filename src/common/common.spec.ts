@@ -205,6 +205,23 @@ describe('buildVCard', () => {
     expect(card).toContain('item2.X-ABLabel:Globe');
     expect(card).not.toContain('Main again');
   });
+
+  it('labels the main phone too when it has a label', () => {
+    const card = buildVCard(
+      {
+        ...profile,
+        contact: {
+          ...profile.contact,
+          phone: '+63 917 555 0100',
+          phoneLabel: 'Globe',
+        },
+      },
+      'https://x.test/c/demo',
+    );
+    expect(card).toContain('item0.TEL;TYPE=CELL,VOICE:+639175550100');
+    expect(card).toContain('item0.X-ABLabel:Globe');
+    expect(card).not.toContain('TEL;TYPE=WORK');
+  });
 });
 
 describe('isButtonLink', () => {

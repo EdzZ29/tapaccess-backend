@@ -61,6 +61,7 @@ interface Demo {
     | 'coverUrl'
     | 'tapAction'
     | 'extraPhones'
+    | 'phoneLabel'
   >;
   theme: ThemeConfig;
   hours: [open: string, close: string, closedDays: number[]];

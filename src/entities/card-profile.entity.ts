@@ -47,6 +47,10 @@ export class CardProfile {
   @Column({ type: 'varchar', length: 40, nullable: true })
   phone!: string | null;
 
+  /** Optional name for the main phone, e.g. "Globe" (default "Phone"). */
+  @Column({ type: 'varchar', length: 30, nullable: true })
+  phoneLabel!: string | null;
+
   @Column({ type: 'varchar', length: 40, nullable: true })
   whatsapp!: string | null;
 

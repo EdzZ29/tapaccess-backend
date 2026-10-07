@@ -95,6 +95,7 @@ export function toCardDetail(
       logoUrl: p.logoUrl,
       coverUrl: p.coverUrl,
       phone: p.phone,
+      phoneLabel: p.phoneLabel,
       extraPhones: p.extraPhones ?? [],
       whatsapp: p.whatsapp,
       email: p.email,

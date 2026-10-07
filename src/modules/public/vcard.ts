@@ -54,7 +54,12 @@ export function buildVCard(
     'X-ABShowAs:COMPANY',
   ];
   if (profile.tagline) lines.push(`TITLE:${esc(profile.tagline)}`);
-  if (c.phone) lines.push(`TEL;TYPE=WORK,VOICE:${dial(c.phone)}`);
+  if (c.phone && c.phoneLabel) {
+    lines.push(`item0.TEL;TYPE=CELL,VOICE:${dial(c.phone)}`);
+    lines.push(`item0.X-ABLabel:${esc(c.phoneLabel)}`);
+  } else if (c.phone) {
+    lines.push(`TEL;TYPE=WORK,VOICE:${dial(c.phone)}`);
+  }
   const seen = new Set(c.phone ? [dial(c.phone)] : []);
   // Extra numbers keep their label ("Smart", "Globe"…): Apple reads the
   // grouped X-ABLabel; other apps still import the number as a mobile.

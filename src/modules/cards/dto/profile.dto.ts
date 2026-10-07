@@ -146,6 +146,14 @@ export class ProfileFieldsDto {
   @Matches(PHONE, { message: 'phone must be a valid phone number' })
   phone!: string | null;
 
+  /** e.g. "Globe"; optional so older editors keep working. */
+  @IsOptional()
+  @CleanOptionalText()
+  @ValidateIf((_, v) => v !== null)
+  @IsString()
+  @MaxLength(30)
+  phoneLabel: string | null = null;
+
   @CleanOptionalText()
   @ValidateIf((_, v) => v !== null)
   @Matches(INTERNATIONAL_PHONE, {

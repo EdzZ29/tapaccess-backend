@@ -615,6 +615,27 @@ describe('TapAccess API (e2e)', () => {
         .get('/api/public/cards/e2e-shop/vcard')
         .expect(200);
       expect(vcard.text).toContain('item1.X-ABLabel:Smart');
+
+      // The main phone can carry a label too.
+      const labelled = await authed(
+        request(http).put(`/api/admin/cards/${card.id}/profile`),
+      )
+        .send({
+          profile: {
+            ...card.profile,
+            phone: '+63 917 555 0100',
+            phoneLabel: 'Globe',
+          },
+          sections: [],
+          buttons: card.buttons,
+          socialLinks: card.socialLinks,
+        })
+        .expect(200);
+      expect(labelled.body.profile.phoneLabel).toBe('Globe');
+      const pub2 = await request(http)
+        .get('/api/public/cards/e2e-shop')
+        .expect(200);
+      expect(pub2.body.contact.phoneLabel).toBe('Globe');
       expect(vcard.text).toContain('TEL;TYPE=CELL:+639175550300');
     });
 

@@ -70,6 +70,7 @@ export function toPublicProfile(card: NfcCard, now = new Date()) {
     coverUrl: image(p.coverUrl),
     contact: {
       phone: p.phone,
+      phoneLabel: p.phoneLabel,
       extraPhones: (p.extraPhones ?? []).map((x) => ({
         label: x.label,
         number: x.number,
