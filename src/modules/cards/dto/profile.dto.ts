@@ -91,6 +91,21 @@ export class OpeningHoursDayDto {
   @Matches(TIME) close!: string;
 }
 
+/** Most cards need one or two extra numbers; five keeps the card tidy. */
+export const MAX_EXTRA_PHONES = 5;
+
+export class ExtraPhoneDto {
+  @CleanText()
+  @IsString()
+  @MinLength(1, { message: 'Give each extra number a label, e.g. Smart' })
+  @MaxLength(30)
+  label!: string;
+
+  @CleanText()
+  @Matches(PHONE, { message: 'extra number must be a valid phone number' })
+  number!: string;
+}
+
 export class ProfileFieldsDto {
   @CleanText()
   @IsString()
@@ -138,6 +153,14 @@ export class ProfileFieldsDto {
       'WhatsApp number must start with + and the country code, e.g. +63 917 123 4567',
   })
   whatsapp!: string | null;
+
+  /** More numbers, e.g. one per network. Optional so older editors keep working. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MAX_EXTRA_PHONES)
+  @ValidateNested({ each: true })
+  @Type(() => ExtraPhoneDto)
+  extraPhones: ExtraPhoneDto[] = [];
 
   @CleanOptionalText()
   @ValidateIf((_, v) => v !== null)

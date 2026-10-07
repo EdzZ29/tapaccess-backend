@@ -55,7 +55,17 @@ export function buildVCard(
   ];
   if (profile.tagline) lines.push(`TITLE:${esc(profile.tagline)}`);
   if (c.phone) lines.push(`TEL;TYPE=WORK,VOICE:${dial(c.phone)}`);
-  if (c.whatsapp && (!c.phone || dial(c.whatsapp) !== dial(c.phone))) {
+  const seen = new Set(c.phone ? [dial(c.phone)] : []);
+  // Extra numbers keep their label ("Smart", "Globe"…): Apple reads the
+  // grouped X-ABLabel; other apps still import the number as a mobile.
+  for (const [i, x] of (c.extraPhones ?? []).entries()) {
+    const number = dial(x.number);
+    if (!number || seen.has(number)) continue;
+    seen.add(number);
+    lines.push(`item${i + 1}.TEL;TYPE=CELL:${number}`);
+    lines.push(`item${i + 1}.X-ABLabel:${esc(x.label)}`);
+  }
+  if (c.whatsapp && !seen.has(dial(c.whatsapp))) {
     lines.push(`TEL;TYPE=CELL:${dial(c.whatsapp)}`);
   }
   if (c.email) lines.push(`EMAIL;TYPE=INTERNET,WORK:${c.email}`);

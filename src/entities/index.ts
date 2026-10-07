@@ -3,6 +3,7 @@ import { ButtonClick } from './button-click.entity';
 import { CardButton } from './card-button.entity';
 import { CardProfile } from './card-profile.entity';
 import { CardSection } from './card-section.entity';
+import { CardSlugRedirect } from './card-slug-redirect.entity';
 import { CardVisit } from './card-visit.entity';
 import { MediaAsset } from './media-asset.entity';
 import { NfcCard } from './nfc-card.entity';
@@ -17,6 +18,7 @@ export {
   CardButton,
   CardProfile,
   CardSection,
+  CardSlugRedirect,
   CardVisit,
   MediaAsset,
   NfcCard,
@@ -35,4 +37,5 @@ export const ENTITIES = [
   MediaAsset,
   CardVisit,
   ButtonClick,
+  CardSlugRedirect,
 ];

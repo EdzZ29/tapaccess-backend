@@ -177,6 +177,34 @@ describe('buildVCard', () => {
     expect(card.startsWith('BEGIN:VCARD\r\n')).toBe(true);
     expect(card.trimEnd().endsWith('END:VCARD')).toBe(true);
   });
+
+  it('adds every extra number with its label, without duplicates', () => {
+    const card = buildVCard(
+      {
+        ...profile,
+        contact: {
+          ...profile.contact,
+          phone: '+63 917 555 0100',
+          whatsapp: '+63 918 555 0200',
+          extraPhones: [
+            { label: 'Smart', number: '+63 918 555 0200' },
+            { label: 'Globe', number: '+63 (917) 555-0300' },
+            { label: 'Main again', number: '+63 917 555 0100' },
+          ],
+        },
+      },
+      'https://x.test/c/demo',
+    );
+    const tels = card.split('\r\n').filter((l) => /TEL/.test(l));
+    expect(tels).toEqual([
+      'TEL;TYPE=WORK,VOICE:+639175550100',
+      'item1.TEL;TYPE=CELL:+639185550200',
+      'item2.TEL;TYPE=CELL:+639175550300',
+    ]);
+    expect(card).toContain('item1.X-ABLabel:Smart');
+    expect(card).toContain('item2.X-ABLabel:Globe');
+    expect(card).not.toContain('Main again');
+  });
 });
 
 describe('isButtonLink', () => {

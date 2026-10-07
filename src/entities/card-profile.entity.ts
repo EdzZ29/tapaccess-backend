@@ -10,7 +10,7 @@ import {
 } from 'typeorm';
 import { TapAction } from './enums';
 import { NfcCard } from './nfc-card.entity';
-import type { OpeningHoursDay, ThemeConfig } from './profile-types';
+import type { ExtraPhone, OpeningHoursDay, ThemeConfig } from './profile-types';
 
 @Entity('card_profiles')
 export class CardProfile {
@@ -49,6 +49,10 @@ export class CardProfile {
 
   @Column({ type: 'varchar', length: 40, nullable: true })
   whatsapp!: string | null;
+
+  /** More numbers (other networks, landline), in display order. */
+  @Column({ type: 'jsonb', default: () => "'[]'" })
+  extraPhones!: ExtraPhone[];
 
   @Column({ type: 'varchar', length: 254, nullable: true })
   email!: string | null;

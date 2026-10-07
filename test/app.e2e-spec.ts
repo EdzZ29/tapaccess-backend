@@ -267,16 +267,52 @@ describe('TapAccess API (e2e)', () => {
       await request(http).get('/api/public/cards/never-issued').expect(404);
     });
 
-    it('activates, then locks the slug', async () => {
+    it('lets an active card change its slug; the old one keeps forwarding', async () => {
       await authed(request(http).patch(`/api/admin/cards/${cardId}/status`))
         .send({ status: 'active' })
         .expect(200);
-      const res = await authed(
+      const renamed = await authed(
         request(http).patch(`/api/admin/cards/${cardId}`),
       )
-        .send({ slug: 'renamed' })
+        .send({ slug: 'e2e-renamed' })
+        .expect(200);
+      expect(renamed.body).toMatchObject({
+        slug: 'e2e-renamed',
+        slugForwards: true,
+        oldSlugs: ['e2e-shop'],
+      });
+
+      // Old NFC tags and links still reach the card…
+      const moved = await request(http)
+        .get('/api/public/cards/e2e-shop')
+        .expect(200);
+      expect(moved.body).toEqual({ movedTo: 'e2e-renamed' });
+      const vcard = await request(http)
+        .get('/api/public/cards/e2e-shop/vcard')
+        .expect(200);
+      expect(vcard.text).toContain('/c/e2e-renamed');
+      // …and no other card can take the old address.
+      const check = await authed(
+        request(http)
+          .get('/api/admin/cards/slug-availability')
+          .query({ slug: 'e2e-shop' }),
+      ).expect(200);
+      expect(check.body.available).toBe(false);
+      await authed(request(http).post('/api/admin/cards'))
+        .send({ businessName: 'Squatter', slug: 'e2e-shop' })
         .expect(409);
-      expect(res.body.code).toBe('SLUG_LOCKED');
+
+      // The card itself can take its old address back.
+      const back = await authed(
+        request(http).patch(`/api/admin/cards/${cardId}`),
+      )
+        .send({ slug: 'e2e-shop' })
+        .expect(200);
+      expect(back.body.oldSlugs).toEqual(['e2e-renamed']);
+      const forward = await request(http)
+        .get('/api/public/cards/e2e-renamed')
+        .expect(200);
+      expect(forward.body).toEqual({ movedTo: 'e2e-shop' });
     });
 
     it('serves only public data, without notes, internal IDs or expired items', async () => {
@@ -536,6 +572,50 @@ describe('TapAccess API (e2e)', () => {
         request(http).get('/api/admin/media/status'),
       ).expect(200);
       expect(status.body).toEqual({ provider: 'local', problem: null });
+    });
+
+    it('saves extra numbers (Smart, Globe…) and puts them in the vCard', async () => {
+      const { body: list } = await authed(
+        request(http).get('/api/admin/cards').query({ search: 'e2e-shop' }),
+      ).expect(200);
+      const { body: card } = await authed(
+        request(http).get(`/api/admin/cards/${list.data[0].id}`),
+      ).expect(200);
+      const save = (extraPhones: unknown) =>
+        authed(request(http).put(`/api/admin/cards/${card.id}/profile`)).send({
+          profile: { ...card.profile, extraPhones },
+          sections: [],
+          buttons: card.buttons,
+          socialLinks: card.socialLinks,
+        });
+
+      await save([{ label: '', number: '+63 917 000 0000' }]).expect(400);
+      await save([{ label: 'Smart', number: 'call me' }]).expect(400);
+      await save(
+        Array.from({ length: 6 }, (_, i) => ({
+          label: `N${i}`,
+          number: '+63 917 000 000' + String(i),
+        })),
+      ).expect(400);
+
+      const ok = await save([
+        { label: 'Smart', number: '+63 918 555 0200' },
+        { label: 'Globe', number: '+63 917 555 0300' },
+      ]).expect(200);
+      expect(ok.body.profile.extraPhones).toHaveLength(2);
+
+      const pub = await request(http)
+        .get('/api/public/cards/e2e-shop')
+        .expect(200);
+      expect(pub.body.contact.extraPhones).toEqual([
+        { label: 'Smart', number: '+63 918 555 0200' },
+        { label: 'Globe', number: '+63 917 555 0300' },
+      ]);
+      const vcard = await request(http)
+        .get('/api/public/cards/e2e-shop/vcard')
+        .expect(200);
+      expect(vcard.text).toContain('item1.X-ABLabel:Smart');
+      expect(vcard.text).toContain('TEL;TYPE=CELL:+639175550300');
     });
 
     it('rejects a WhatsApp number without a country code', async () => {

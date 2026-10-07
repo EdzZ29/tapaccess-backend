@@ -55,7 +55,12 @@ interface Demo {
   palette: [string, string];
   profile: Omit<
     SaveProfileDto['profile'],
-    'theme' | 'openingHours' | 'logoUrl' | 'coverUrl' | 'tapAction'
+    | 'theme'
+    | 'openingHours'
+    | 'logoUrl'
+    | 'coverUrl'
+    | 'tapAction'
+    | 'extraPhones'
   >;
   theme: ThemeConfig;
   hours: [open: string, close: string, closedDays: number[]];

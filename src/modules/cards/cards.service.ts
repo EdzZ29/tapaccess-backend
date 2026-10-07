@@ -18,6 +18,7 @@ import {
   CardPlan,
   CardProfile,
   CardSection,
+  CardSlugRedirect,
   CardStatus,
   CardVisit,
   DEFAULT_OPENING_HOURS,
@@ -143,7 +144,15 @@ export class CardsService {
   async get(id: string) {
     const card = await this.findFull(id);
     const counts = await this.visitCounts([id]);
-    return toCardDetail(card, counts.get(id) ?? 0);
+    const oldSlugs = await this.db.getRepository(CardSlugRedirect).find({
+      where: { cardId: id },
+      order: { createdAt: 'DESC' },
+    });
+    return toCardDetail(
+      card,
+      counts.get(id) ?? 0,
+      oldSlugs.map((r) => r.slug),
+    );
   }
 
   async slugAvailability(slug: string, excludeId?: string) {
@@ -153,12 +162,26 @@ export class CardsService {
       where: { slug },
       select: { id: true },
     });
-    const taken = existing !== null && existing.id !== excludeId;
-    return {
-      slug,
-      available: !taken,
-      reason: taken ? 'This slug is already in use' : null,
-    };
+    if (existing !== null && existing.id !== excludeId) {
+      return {
+        slug,
+        available: false,
+        reason: 'This slug is already in use',
+      };
+    }
+    // Another card's old address still forwards to that card.
+    const redirect = await this.db
+      .getRepository(CardSlugRedirect)
+      .findOneBy({ slug });
+    if (redirect && redirect.cardId !== excludeId) {
+      return {
+        slug,
+        available: false,
+        reason:
+          "This was another card's address and still forwards to it, so it can't be reused",
+      };
+    }
+    return { slug, available: true, reason: null };
   }
 
   // ─── Mutations ────────────────────────────────────────────────────────────
@@ -196,15 +219,9 @@ export class CardsService {
 
   async update(id: string, dto: UpdateCardDto) {
     const card = await this.findOrFail(id);
+    const previousSlug = card.slug;
 
     if (dto.slug !== undefined && dto.slug !== card.slug) {
-      if (card.firstActivatedAt) {
-        throw new ConflictException({
-          message:
-            'The slug is locked because this card has been activated. Changing it would break the NFC tag.',
-          code: 'SLUG_LOCKED',
-        });
-      }
       await this.assertSlugFree(dto.slug, id);
       card.slug = dto.slug;
     }
@@ -217,7 +234,20 @@ export class CardsService {
     if (dto.notes !== undefined) card.notes = dto.notes;
     if (dto.plan !== undefined) card.plan = dto.plan;
 
-    await this.cards.save(card);
+    await this.db.transaction(async (m) => {
+      if (card.slug !== previousSlug) {
+        // The card may be taking back one of its own old addresses.
+        await m.delete(CardSlugRedirect, { slug: card.slug, cardId: id });
+        // Once a card is live, its old address may be on NFC tags, QR codes
+        // and shared links: keep it, forwarding to the new one.
+        if (card.firstActivatedAt) {
+          await m.upsert(CardSlugRedirect, { slug: previousSlug, cardId: id }, [
+            'slug',
+          ]);
+        }
+      }
+      await m.save(card);
+    });
     return this.get(id);
   }
 

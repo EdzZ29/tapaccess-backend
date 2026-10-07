@@ -22,10 +22,17 @@ const isLive = (item: SectionItem, now: Date) =>
  */
 function effectiveTapAction(
   action: TapAction,
-  p: { phone: string | null; email: string | null; whatsapp: string | null },
+  p: {
+    phone: string | null;
+    email: string | null;
+    whatsapp: string | null;
+    extraPhones: unknown[];
+  },
 ): TapAction {
   if (action === TapAction.Call && !p.phone) return TapAction.Profile;
-  if (action === TapAction.SaveContact && !p.phone && !p.email && !p.whatsapp)
+  const nothingToSave =
+    !p.phone && !p.email && !p.whatsapp && !p.extraPhones?.length;
+  if (action === TapAction.SaveContact && nothingToSave)
     return TapAction.Profile;
   return action;
 }
@@ -63,6 +70,10 @@ export function toPublicProfile(card: NfcCard, now = new Date()) {
     coverUrl: image(p.coverUrl),
     contact: {
       phone: p.phone,
+      extraPhones: (p.extraPhones ?? []).map((x) => ({
+        label: x.label,
+        number: x.number,
+      })),
       whatsapp: p.whatsapp,
       email: p.email,
       website: p.website,

@@ -21,7 +21,8 @@ export function toCardSummary(card: NfcCard, visitCount = 0) {
     category: card.profile?.category ?? null,
     logoUrl: card.profile?.logoUrl ?? null,
     notes: card.notes,
-    slugLocked: card.firstActivatedAt !== null,
+    /** Once live, a slug change keeps the old address forwarding here. */
+    slugForwards: card.firstActivatedAt !== null,
     firstActivatedAt: card.firstActivatedAt,
     archivedAt: card.archivedAt,
     ownerAccess: {
@@ -76,10 +77,16 @@ const social = (l: SocialLink) => ({
 });
 
 /** Everything the admin editor needs, including disabled content. */
-export function toCardDetail(card: NfcCard, visitCount = 0) {
+export function toCardDetail(
+  card: NfcCard,
+  visitCount = 0,
+  oldSlugs: string[] = [],
+) {
   const p = card.profile;
   return {
     ...toCardSummary(card, visitCount),
+    /** Previous addresses that forward to this card. */
+    oldSlugs,
     profile: {
       businessName: p.businessName,
       tagline: p.tagline,
@@ -88,6 +95,7 @@ export function toCardDetail(card: NfcCard, visitCount = 0) {
       logoUrl: p.logoUrl,
       coverUrl: p.coverUrl,
       phone: p.phone,
+      extraPhones: p.extraPhones ?? [],
       whatsapp: p.whatsapp,
       email: p.email,
       website: p.website,
