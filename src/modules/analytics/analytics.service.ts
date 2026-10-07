@@ -393,7 +393,12 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
         return {
           buttonId: null,
           target: platform,
-          label: platform === SocialPlatform.X ? 'X' : capitalise(platform),
+          label:
+            platform === SocialPlatform.X
+              ? 'X'
+              : platform === SocialPlatform.GoogleReviews
+                ? 'Google Reviews'
+                : capitalise(platform),
         };
       }
       case ClickKind.Contact: {

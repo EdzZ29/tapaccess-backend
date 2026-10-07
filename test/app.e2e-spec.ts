@@ -574,6 +574,47 @@ describe('TapAccess API (e2e)', () => {
       expect(status.body).toEqual({ provider: 'local', problem: null });
     });
 
+    it('accepts a Google Reviews social link, also on Starter', async () => {
+      const created = await authed(request(http).post('/api/admin/cards'))
+        .send({
+          businessName: 'Review Me',
+          slug: 'e2e-reviews',
+          plan: 'starter',
+        })
+        .expect(201);
+      await authed(
+        request(http).patch(`/api/admin/cards/${created.body.id}/status`),
+      )
+        .send({ status: 'active' })
+        .expect(200);
+      const { body: card } = await authed(
+        request(http).get(`/api/admin/cards/${created.body.id}`),
+      );
+      await authed(request(http).put(`/api/admin/cards/${card.id}/profile`))
+        .send({
+          profile: card.profile,
+          sections: [],
+          buttons: [],
+          socialLinks: [
+            {
+              platform: 'google_reviews',
+              url: 'https://g.page/r/CReviewMe/review',
+              enabled: true,
+            },
+          ],
+        })
+        .expect(200);
+      const pub = await request(http)
+        .get('/api/public/cards/e2e-reviews')
+        .expect(200);
+      expect(pub.body.socialLinks).toEqual([
+        expect.objectContaining({
+          platform: 'google_reviews',
+          url: 'https://g.page/r/CReviewMe/review',
+        }),
+      ]);
+    });
+
     it('saves extra numbers (Smart, Globe…) and puts them in the vCard', async () => {
       const { body: list } = await authed(
         request(http).get('/api/admin/cards').query({ search: 'e2e-shop' }),

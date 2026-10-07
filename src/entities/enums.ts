@@ -49,6 +49,8 @@ export enum SocialPlatform {
   Telegram = 'telegram',
   Pinterest = 'pinterest',
   Threads = 'threads',
+  /** A link to leave or read the business's Google reviews. */
+  GoogleReviews = 'google_reviews',
   Other = 'other',
 }
 

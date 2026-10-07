@@ -22,8 +22,8 @@ export interface PlanFeatures {
 
 export const PLAN_FEATURES: Record<CardPlan, PlanFeatures> = {
   // Starter: name, About, CTA buttons, contact details (with Call and Save
-  // contact) and Facebook / Instagram / TikTok / X, fully themed — but no
-  // photos.
+  // contact) and Facebook / Instagram / TikTok / X / Google Reviews, fully
+  // themed — but no photos.
   [CardPlan.Starter]: {
     images: false,
     socialPlatforms: [
@@ -31,6 +31,7 @@ export const PLAN_FEATURES: Record<CardPlan, PlanFeatures> = {
       SocialPlatform.Instagram,
       SocialPlatform.TikTok,
       SocialPlatform.X,
+      SocialPlatform.GoogleReviews,
     ],
     sections: [
       SectionType.Actions,
