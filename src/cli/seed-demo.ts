@@ -93,7 +93,7 @@ const DEMOS: Demo[] = [
     palette: ['#16a34a', '#0b0f19'],
     profile: {
       businessName: 'ActiveZone Fitness',
-      tagline: 'Strength, conditioning & community — open 6am to 10pm',
+      tagline: 'Strength, conditioning & community. Open 6am to 10pm',
       description:
         'ActiveZone is a 24/7-friendly training club with certified coaches, a full free-weights floor and small-group classes for every level.\n\nYour first week is on us.',
       category: 'Gym & Fitness',
@@ -622,7 +622,7 @@ async function main() {
         .findOneBy({ slug: demo.slug });
       if (existing && !reset) {
         console.log(
-          `• ${demo.slug} already exists — skipped (use --reset to recreate)`,
+          `• ${demo.slug} already exists, skipped (use --reset to recreate)`,
         );
         continue;
       }
@@ -719,7 +719,7 @@ async function main() {
           ? await seedAnalytics(db, final)
           : { visits: 0, clicks: 0 };
       console.log(
-        `✔ ${demo.slug} (${final.cardCode}, ${demo.status}) — ${stats.visits} visits, ${stats.clicks} clicks`,
+        `✔ ${demo.slug} (${final.cardCode}, ${demo.status}): ${stats.visits} visits, ${stats.clicks} clicks`,
       );
     }
   } finally {

@@ -33,7 +33,7 @@ export class MediaAsset {
   })
   kind!: MediaKind;
 
-  /** `local` or `supabase` — which storage driver holds the file. */
+  /** `local` or `supabase`, which storage driver holds the file. */
   @Column({ type: 'varchar', length: 16 })
   provider!: string;
 

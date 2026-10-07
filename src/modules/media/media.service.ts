@@ -104,7 +104,7 @@ export class MediaService implements OnApplicationBootstrap {
       if (meta.format === 'heif' && meta.compression !== 'av1') {
         throw new BadRequestException({
           message:
-            'HEIC photos (the iPhone camera default) are not supported. Export the photo as JPEG — or on the iPhone set Settings → Camera → Formats → Most Compatible.',
+            'HEIC photos (the iPhone camera default) are not supported. Export the photo as JPEG, or on the iPhone set Settings → Camera → Formats → Most Compatible.',
           code: 'UNSUPPORTED_HEIC',
         });
       }
@@ -119,7 +119,7 @@ export class MediaService implements OnApplicationBootstrap {
       const pixels = (meta.width ?? 0) * (meta.height ?? 0);
       if (pixels > MAX_INPUT_PIXELS) {
         throw new PayloadTooLargeException({
-          message: `This image is ${meta.width}×${meta.height} pixels (${Math.round(pixels / 1e6)} megapixels). The limit is ${MAX_INPUT_PIXELS / 1e6} megapixels — resize it and try again.`,
+          message: `This image is ${meta.width}×${meta.height} pixels (${Math.round(pixels / 1e6)} megapixels). The limit is ${MAX_INPUT_PIXELS / 1e6} megapixels. Resize it and try again.`,
           code: 'IMAGE_TOO_MANY_PIXELS',
         });
       }
@@ -139,7 +139,7 @@ export class MediaService implements OnApplicationBootstrap {
       const message = err instanceof Error ? err.message : '';
       if (/pixel limit/i.test(message))
         throw new PayloadTooLargeException({
-          message: `This image has too many pixels. The limit is ${MAX_INPUT_PIXELS / 1e6} megapixels — resize it and try again.`,
+          message: `This image has too many pixels. The limit is ${MAX_INPUT_PIXELS / 1e6} megapixels. Resize it and try again.`,
           code: 'IMAGE_TOO_MANY_PIXELS',
         });
       throw new BadRequestException({

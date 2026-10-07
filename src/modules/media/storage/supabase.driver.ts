@@ -271,7 +271,7 @@ const isInvalidPath = (error: SupabaseError | null) =>
   );
 
 const AUTH_MESSAGE =
-  "Image storage rejected the server's key. On Render, set SUPABASE_SERVICE_ROLE_KEY to the Supabase project's secret key (sb_secret_…) or legacy service_role key — not the publishable/anon key.";
+  "Image storage rejected the server's key. On Render, set SUPABASE_SERVICE_ROLE_KEY to the Supabase project's secret key (sb_secret_…) or legacy service_role key, not the publishable/anon key.";
 
 async function readError(res: Response): Promise<SupabaseError | null> {
   try {

@@ -4,7 +4,7 @@ import { StorageError, type StorageDriver } from './storage.driver';
 
 /**
  * Writes files to disk; `main.ts` serves them under `/uploads`. Intended for
- * local development only — Render's filesystem is ephemeral.
+ * local development only, Render's filesystem is ephemeral.
  */
 export class LocalStorageDriver implements StorageDriver {
   readonly name = 'local';

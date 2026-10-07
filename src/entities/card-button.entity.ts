@@ -27,7 +27,7 @@ export class CardButton {
   @Column({ type: 'varchar', length: 60 })
   label!: string;
 
-  /** http(s), tel:, mailto: or sms: — validated on write. */
+  /** http(s), tel:, mailto: or sms:, validated on write. */
   @Column({ type: 'varchar', length: 2048 })
   url!: string;
 

@@ -73,7 +73,7 @@ export class CardsController {
   /**
    * Business cards: lets the owner edit their own buttons and social links.
    * Turns access on (or issues a new code, signing the owner out) and
-   * returns the new access code once — it is stored only as a hash.
+   * returns the new access code once, it is stored only as a hash.
    */
   @Post(':id/owner-access')
   issueOwnerCode(@Param('id', ParseUUIDPipe) id: string) {

@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import sharp from 'sharp';
 import { Repository } from 'typeorm';
 import type { AppConfig } from '../../config/env';
+import { PLAN_FEATURES } from '../../common/plans';
 import { CardSlugRedirect, CardStatus, NfcCard } from '../../entities';
 import { MediaService } from '../media/media.service';
 import { toPublicProfile } from './public-profile.mapper';
@@ -43,6 +44,27 @@ export class PublicService {
       if (moved) return { movedTo: moved };
     }
     return this.toProfile(card);
+  }
+
+  /**
+   * "Businesses on TapAccess" for the homepage: active cards the admin chose
+   * to feature. Only what the card itself shows publicly: name, category and
+   * logo (the logo only on packages that include images).
+   */
+  async featured() {
+    const cards = await this.cards.find({
+      where: { featured: true, status: CardStatus.Active },
+      relations: { profile: true },
+      order: { firstActivatedAt: 'ASC' },
+      take: 24,
+    });
+    return cards.map((card) => ({
+      slug: card.slug,
+      businessName: card.profile.businessName,
+      category: card.profile.category,
+      logoUrl: PLAN_FEATURES[card.plan].images ? card.profile.logoUrl : null,
+      color: card.profile.theme.primaryColor,
+    }));
   }
 
   /** The current slug an old address forwards to, if any. */

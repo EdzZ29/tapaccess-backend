@@ -233,6 +233,7 @@ export class CardsService {
     }
     if (dto.notes !== undefined) card.notes = dto.notes;
     if (dto.plan !== undefined) card.plan = dto.plan;
+    if (dto.featured !== undefined) card.featured = dto.featured;
 
     await this.db.transaction(async (m) => {
       if (card.slug !== previousSlug) {

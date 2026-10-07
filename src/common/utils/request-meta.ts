@@ -30,7 +30,7 @@ export function deviceTypeFromUa(userAgent: string | undefined): DeviceType {
   return DeviceType.Unknown;
 }
 
-/** Keep only the hostname of a referrer — never paths or query strings. */
+/** Keep only the hostname of a referrer, never paths or query strings. */
 export function referrerHost(
   referrer: unknown,
   ownHosts: string[],

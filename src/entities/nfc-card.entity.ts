@@ -64,6 +64,13 @@ export class NfcCard {
   archivedAt!: Date | null;
 
   /**
+   * Shown in "Businesses on TapAccess" on the public homepage. Off by
+   * default: card pages are unlisted unless the admin opts a card in.
+   */
+  @Column({ type: 'boolean', default: false })
+  featured!: boolean;
+
+  /**
    * Owner access (Business package): the card's owner may edit their own
    * CTA buttons and social links after signing in with an access code the
    * admin gives them. Only effective while the card is on Business.

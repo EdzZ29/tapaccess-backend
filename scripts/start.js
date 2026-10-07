@@ -1,6 +1,6 @@
 /* eslint-disable */
 /**
- * `npm start` — runs the compiled API (dist/main.js).
+ * `npm start`, runs the compiled API (dist/main.js).
  *
  * Hosting platforms often default to `npm start`. If the build step was
  * skipped, this builds once first (when the Nest CLI is installed) or explains
@@ -26,7 +26,7 @@ if (!existsSync(main)) {
     );
     process.exit(1);
   }
-  console.log('dist/main.js not found — building once before starting…');
+  console.log('dist/main.js not found, building once before starting…');
   const result = spawnSync(process.execPath, [nest, 'build'], { stdio: 'inherit', cwd: join(__dirname, '..') });
   if (result.status !== 0) process.exit(result.status ?? 1);
 }

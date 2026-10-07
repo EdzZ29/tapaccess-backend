@@ -25,6 +25,7 @@ export function toCardSummary(card: NfcCard, visitCount = 0) {
     slugForwards: card.firstActivatedAt !== null,
     firstActivatedAt: card.firstActivatedAt,
     archivedAt: card.archivedAt,
+    featured: card.featured,
     ownerAccess: {
       enabled: card.ownerAccess,
       active: ownerAccessActive(card),

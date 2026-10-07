@@ -26,6 +26,12 @@ export class PublicController {
     private readonly analytics: AnalyticsService,
   ) {}
 
+  /** Businesses shown on the homepage (active cards the admin opted in). */
+  @Get()
+  featured() {
+    return this.publicProfiles.featured();
+  }
+
   @Get(':slug')
   @Header('Cache-Control', 'no-store')
   profile(@Param('slug', SlugParamPipe) slug: string) {

@@ -574,6 +574,45 @@ describe('TapAccess API (e2e)', () => {
       expect(status.body).toEqual({ provider: 'local', problem: null });
     });
 
+    it('lists only opted-in, active cards on the homepage', async () => {
+      const empty = await request(http).get('/api/public/cards').expect(200);
+      expect(empty.body).toEqual([]);
+
+      const { body: list } = await authed(
+        request(http).get('/api/admin/cards').query({ search: 'e2e-shop' }),
+      );
+      const id = list.data[0].id as string;
+      const on = await authed(request(http).patch(`/api/admin/cards/${id}`))
+        .send({ featured: true })
+        .expect(200);
+      expect(on.body.featured).toBe(true);
+
+      const shown = await request(http).get('/api/public/cards').expect(200);
+      expect(shown.body).toEqual([
+        expect.objectContaining({
+          slug: 'e2e-shop',
+          businessName: 'Test Shop',
+        }),
+      ]);
+      // Nothing beyond what the card page itself shows.
+      expect(Object.keys(shown.body[0] as object).sort()).toEqual(
+        ['businessName', 'category', 'color', 'logoUrl', 'slug'].sort(),
+      );
+
+      // Inactive cards drop off even when featured.
+      await authed(request(http).patch(`/api/admin/cards/${id}/status`))
+        .send({ status: 'inactive' })
+        .expect(200);
+      const hidden = await request(http).get('/api/public/cards').expect(200);
+      expect(hidden.body).toEqual([]);
+      await authed(request(http).patch(`/api/admin/cards/${id}/status`))
+        .send({ status: 'active' })
+        .expect(200);
+      await authed(request(http).patch(`/api/admin/cards/${id}`))
+        .send({ featured: false })
+        .expect(200);
+    });
+
     it('accepts a Google Reviews social link, also on Starter', async () => {
       const created = await authed(request(http).post('/api/admin/cards'))
         .send({

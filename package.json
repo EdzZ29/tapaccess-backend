@@ -1,7 +1,7 @@
 {
   "name": "tapaccess-backend",
   "version": "0.0.1",
-  "description": "TapAccess API — NFC digital business card management (NestJS + TypeORM + PostgreSQL)",
+  "description": "TapAccess API, NFC digital business card management (NestJS + TypeORM + PostgreSQL)",
   "author": "",
   "private": true,
   "license": "UNLICENSED",

@@ -1,5 +1,6 @@
 import { Transform } from 'class-transformer';
 import {
+  IsBoolean,
   IsEnum,
   IsIn,
   IsOptional,
@@ -99,11 +100,16 @@ export class UpdateCardDto {
   @IsEnum(CardPlan)
   plan?: CardPlan;
 
-  /** Only accepted while the card has never been activated. */
+  /** Live cards keep their old address forwarding to the new one. */
   @IsOptional()
   @lowerTrim()
   @IsCardSlug()
   slug?: string;
+
+  /** Show the card on the public homepage. */
+  @IsOptional()
+  @IsBoolean()
+  featured?: boolean;
 
   @IsOptional()
   @CleanOptionalText({ multiline: true })

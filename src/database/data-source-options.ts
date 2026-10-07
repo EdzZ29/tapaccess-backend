@@ -14,8 +14,8 @@ export interface DatabaseEnv {
 
 /**
  * TLS unless the database is on this machine or on Render's private network
- * (internal hostnames like `dpg-abc123-a` have no dots). Hosted databases —
- * Supabase, Render's external URL, Neon — all require it.
+ * (internal hostnames like `dpg-abc123-a` have no dots). Hosted databases -
+ * Supabase, Render's external URL, Neon, all require it.
  */
 export function useSsl(url: string, explicit?: boolean): boolean {
   if (explicit !== undefined) return explicit;
@@ -55,7 +55,7 @@ export function buildDataSourceOptions(env: DatabaseEnv): DataSourceOptions {
     migrations: [join(__dirname, 'migrations', '*.{ts,js}')],
     migrationsTableName: 'typeorm_migrations',
     // Applying migrations at startup means a fresh deploy creates its own
-    // tables — no separate step, which Render's free plan can't run anyway.
+    // tables, no separate step, which Render's free plan can't run anyway.
     migrationsRun: env.DATABASE_MIGRATE ?? false,
     namingStrategy: new SnakeNamingStrategy(),
     synchronize: false,

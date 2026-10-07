@@ -172,7 +172,7 @@ export function validateEnv(raw: Record<string, unknown>) {
   const errors = validateSync(env, { skipMissingProperties: false });
   const isProduction = config.NODE_ENV === NodeEnv.Production;
   if (errors.length > 0) {
-    // Separate "not set at all" from "set but wrong" — the first is by far
+    // Separate "not set at all" from "set but wrong", the first is by far
     // the most common deploy mistake and deserves a plain-language message.
     const missing = errors
       .filter(
@@ -188,7 +188,7 @@ export function validateEnv(raw: Record<string, unknown>) {
     throw new Error(
       [
         '',
-        'TapAccess API cannot start — environment variables need attention.',
+        'TapAccess API cannot start: environment variables need attention.',
         ...(missing.length
           ? [
               '',

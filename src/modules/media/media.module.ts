@@ -31,7 +31,7 @@ import { SupabaseStorageDriver } from './storage/supabase.driver';
           cb(
             new BadRequestException({
               message: heic
-                ? 'HEIC photos (the iPhone camera default) are not supported. Export the photo as JPEG — or on the iPhone set Settings → Camera → Formats → Most Compatible.'
+                ? 'HEIC photos (the iPhone camera default) are not supported. Export the photo as JPEG, or on the iPhone set Settings → Camera → Formats → Most Compatible.'
                 : `"${file.originalname.slice(0, 80)}" is not a supported image (${file.mimetype || 'unknown type'}). Use JPEG, PNG, WebP, GIF or AVIF.`,
               code: heic ? 'UNSUPPORTED_HEIC' : 'UNSUPPORTED_TYPE',
             }),

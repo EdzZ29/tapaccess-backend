@@ -48,7 +48,7 @@ import { PublicModule } from './modules/public/public.module';
           ],
           // Server-side renders come from the Next.js server itself (internal
           // key, no visitor IP) and are not rate-limited. Requests it forwards
-          // on a visitor's behalf are limited per visitor IP — see
+          // on a visitor's behalf are limited per visitor IP, see
           // common/internal-request.ts.
           skipIf: (ctx) => {
             const req = ctx.switchToHttp().getRequest<InternalRequest>();
