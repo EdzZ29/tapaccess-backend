@@ -11,6 +11,7 @@ import {
 } from 'typeorm';
 import { CardButton } from './card-button.entity';
 import { CardProfile } from './card-profile.entity';
+import { CardReview } from './card-review.entity';
 import { CardSection } from './card-section.entity';
 import { CardPlan, CardStatus } from './enums';
 import { SocialLink } from './social-link.entity';
@@ -110,6 +111,10 @@ export class NfcCard {
 
   @OneToMany(() => SocialLink, (link) => link.card)
   socialLinks!: Relation<SocialLink[]>;
+
+  /** The owner's review of TapAccess, if a review link was ever made. */
+  @OneToOne(() => CardReview, (review) => review.card)
+  review?: Relation<CardReview> | null;
 
   /** Populated by `loadRelationCountAndMap` in list queries. */
   visitCount?: number;

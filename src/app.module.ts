@@ -18,6 +18,7 @@ import { HealthController } from './modules/health/health.controller';
 import { MediaModule } from './modules/media/media.module';
 import { OwnerModule } from './modules/owner/owner.module';
 import { PublicModule } from './modules/public/public.module';
+import { ReviewsModule } from './modules/reviews/reviews.module';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { PublicModule } from './modules/public/public.module';
     AnalyticsModule,
     PublicModule,
     OwnerModule,
+    ReviewsModule,
   ],
   controllers: [HealthController],
   providers: [

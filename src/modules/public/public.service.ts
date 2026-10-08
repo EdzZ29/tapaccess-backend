@@ -11,6 +11,7 @@ import type { AppConfig } from '../../config/env';
 import { PLAN_FEATURES } from '../../common/plans';
 import { CardSlugRedirect, CardStatus, NfcCard } from '../../entities';
 import { MediaService } from '../media/media.service';
+import { publicReview } from '../reviews/reviews.service';
 import { toPublicProfile } from './public-profile.mapper';
 import { buildVCard, vCardDisposition } from './vcard';
 
@@ -49,12 +50,13 @@ export class PublicService {
   /**
    * "Businesses on TapAccess" for the homepage: active cards the admin chose
    * to feature. Only what the card itself shows publicly: name, category and
-   * logo (the logo only on packages that include images).
+   * logo (the logo only on packages that include images), plus the owner's
+   * review of TapAccess when they left one and the admin hasn't hidden it.
    */
   async featured() {
     const cards = await this.cards.find({
       where: { featured: true, status: CardStatus.Active },
-      relations: { profile: true },
+      relations: { profile: true, review: true },
       order: { firstActivatedAt: 'ASC' },
       take: 24,
     });
@@ -64,6 +66,7 @@ export class PublicService {
       category: card.profile.category,
       logoUrl: PLAN_FEATURES[card.plan].images ? card.profile.logoUrl : null,
       color: card.profile.theme.primaryColor,
+      review: publicReview(card.review),
     }));
   }
 

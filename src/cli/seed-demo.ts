@@ -455,10 +455,10 @@ const DEMOS: Demo[] = [
 
 const png = (svg: string) => sharp(Buffer.from(svg)).png().toBuffer();
 
-const logoSvg = (initials: string, [a, b]: [string, string]) => `
+/** A plain logo: initials on one solid brand colour. */
+const logoSvg = (initials: string, [a]: [string, string]) => `
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
-  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs>
-  <rect width="512" height="512" fill="url(#g)"/>
+  <rect width="512" height="512" fill="${a}"/>
   <text x="50%" y="54%" font-family="Arial, Helvetica, sans-serif" font-size="200" font-weight="700"
         fill="#ffffff" text-anchor="middle" dominant-baseline="middle">${initials}</text>
 </svg>`;

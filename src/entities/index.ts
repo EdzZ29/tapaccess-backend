@@ -2,6 +2,7 @@ import { Admin } from './admin.entity';
 import { ButtonClick } from './button-click.entity';
 import { CardButton } from './card-button.entity';
 import { CardProfile } from './card-profile.entity';
+import { CardReview } from './card-review.entity';
 import { CardSection } from './card-section.entity';
 import { CardSlugRedirect } from './card-slug-redirect.entity';
 import { CardVisit } from './card-visit.entity';
@@ -17,6 +18,7 @@ export {
   ButtonClick,
   CardButton,
   CardProfile,
+  CardReview,
   CardSection,
   CardSlugRedirect,
   CardVisit,
@@ -38,4 +40,5 @@ export const ENTITIES = [
   CardVisit,
   ButtonClick,
   CardSlugRedirect,
+  CardReview,
 ];
