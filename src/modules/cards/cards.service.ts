@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { Brackets, DataSource, EntityManager, In, Repository } from 'typeorm';
 import { paginate } from '../../common/dto/pagination.dto';
@@ -12,7 +13,9 @@ import {
   generateOwnerCode,
   normalizeOwnerCode,
 } from '../../common/utils/owner-code';
+import { SecretBox } from '../../common/utils/secret-box';
 import { slugProblem } from '../../common/utils/slug';
+import type { AppConfig } from '../../config/env';
 import {
   CardButton,
   CardPlan,
@@ -60,12 +63,21 @@ const SORT_COLUMNS: Record<ListCardsQueryDto['sort'], string> = {
 
 @Injectable()
 export class CardsService {
+  /** Keeps owner access codes readable for the admin (see turnOnOwnerAccess). */
+  private readonly ownerCodes: SecretBox;
+
   constructor(
     @InjectDataSource() private readonly db: DataSource,
     @InjectRepository(NfcCard) private readonly cards: Repository<NfcCard>,
     @InjectRepository(CardVisit) private readonly visits: Repository<CardVisit>,
     private readonly media: MediaService,
-  ) {}
+    config: ConfigService<AppConfig, true>,
+  ) {
+    this.ownerCodes = new SecretBox(
+      config.get('JWT_SECRET', { infer: true }),
+      'owner-code-v1',
+    );
+  }
 
   // ─── Queries ──────────────────────────────────────────────────────────────
 
@@ -463,10 +475,12 @@ export class CardsService {
   // ─── Owner access (Business) ──────────────────────────────────────────────
 
   /**
-   * Turns owner access on (or issues a new code) and returns the code once.
-   * A new code signs the owner out of any existing session.
+   * Turns owner access on and returns the card's access code. The code is
+   * made once per card: turning access off and on again keeps it. A code is
+   * only made when the card has none the admin can see (first time, or a
+   * code from before codes were kept viewable).
    */
-  async issueOwnerCode(id: string) {
+  async turnOnOwnerAccess(id: string) {
     const card = await this.findOrFail(id);
     if (!ownerAccessAllowed(card.plan)) {
       throw new BadRequestException({
@@ -481,26 +495,52 @@ export class CardsService {
         code: 'CARD_ARCHIVED',
       });
     }
-    const code = generateOwnerCode();
-    await this.cards.update(id, {
-      ownerAccess: true,
-      ownerCodeHash: await hashPassword(normalizeOwnerCode(code)),
-      ownerCodeSetAt: new Date(),
-      ownerTokenVersion: card.ownerTokenVersion + 1,
-    });
+    let code = await this.viewableOwnerCode(id);
+    if (code) {
+      await this.cards.update(id, { ownerAccess: true });
+    } else {
+      code = generateOwnerCode();
+      await this.cards.update(id, {
+        ownerAccess: true,
+        ownerCodeHash: await hashPassword(normalizeOwnerCode(code)),
+        ownerCodeEncrypted: this.ownerCodes.seal(code),
+        ownerCodeSetAt: new Date(),
+        // Signs out a session made with an older, unviewable code.
+        ownerTokenVersion: card.ownerTokenVersion + 1,
+      });
+    }
     return { ...(await this.get(id)), ownerCode: code };
   }
 
-  /** Turns owner access off, forgets the code and signs the owner out. */
-  async revokeOwnerAccess(id: string) {
+  /**
+   * Turns owner access off and signs the owner out. The code is kept, so
+   * turning access on again gives the owner back the same code.
+   */
+  async turnOffOwnerAccess(id: string) {
     const card = await this.findOrFail(id);
     await this.cards.update(id, {
       ownerAccess: false,
-      ownerCodeHash: null,
-      ownerCodeSetAt: null,
       ownerTokenVersion: card.ownerTokenVersion + 1,
     });
     return this.get(id);
+  }
+
+  /** The card's access code for the admin to show; null if there's none to show. */
+  async ownerCode(id: string) {
+    await this.findOrFail(id);
+    return { code: await this.viewableOwnerCode(id) };
+  }
+
+  /** The stored code, when there is one and it can be read back. */
+  private async viewableOwnerCode(id: string): Promise<string | null> {
+    const row = await this.cards
+      .createQueryBuilder('c')
+      .select(['c.id'])
+      .addSelect(['c.ownerCodeHash', 'c.ownerCodeEncrypted'])
+      .where('c.id = :id', { id })
+      .getOne();
+    if (!row?.ownerCodeHash) return null;
+    return this.ownerCodes.open(row.ownerCodeEncrypted);
   }
 
   async ownerView(id: string) {

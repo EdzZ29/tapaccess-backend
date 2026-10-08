@@ -72,17 +72,24 @@ export class CardsController {
 
   /**
    * Business cards: lets the owner edit their own buttons and social links.
-   * Turns access on (or issues a new code, signing the owner out) and
-   * returns the new access code once, it is stored only as a hash.
+   * Turns access on and returns the card's access code, made once per card
+   * and kept when access is turned off and on again.
    */
   @Post(':id/owner-access')
-  issueOwnerCode(@Param('id', ParseUUIDPipe) id: string) {
-    return this.cards.issueOwnerCode(id);
+  turnOnOwnerAccess(@Param('id', ParseUUIDPipe) id: string) {
+    return this.cards.turnOnOwnerAccess(id);
   }
 
+  /** The card's access code, for the admin to give to the owner again. */
+  @Get(':id/owner-access')
+  ownerCode(@Param('id', ParseUUIDPipe) id: string) {
+    return this.cards.ownerCode(id);
+  }
+
+  /** Turns access off and signs the owner out; the code is kept. */
   @Delete(':id/owner-access')
-  revokeOwnerAccess(@Param('id', ParseUUIDPipe) id: string) {
-    return this.cards.revokeOwnerAccess(id);
+  turnOffOwnerAccess(@Param('id', ParseUUIDPipe) id: string) {
+    return this.cards.turnOffOwnerAccess(id);
   }
 
   @Post(':id/duplicate')

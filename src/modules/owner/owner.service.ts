@@ -23,7 +23,7 @@ const SESSION_DAYS = 30;
 /**
  * Sign-in for card owners. The admin hands the owner an access code; with it
  * they can edit only their own card's buttons and social links. Sessions end
- * when the admin issues a new code, switches access off, archives the card
+ * when the admin switches access off, archives the card
  * or moves it off the Business package.
  */
 @Injectable()
@@ -59,7 +59,7 @@ export class OwnerService {
       this.loginGuard.recordFailure(key);
       throw new UnauthorizedException({
         message:
-          "That access code isn't right for this card. Check it (letters and numbers, like K7QP3-MX9RW) or ask for a new one.",
+          "That access code isn't right for this card, or editing is turned off. Check the code, or ask TapAccess to send it to you again.",
         code: 'OWNER_LOGIN_FAILED',
       });
     }

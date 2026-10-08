@@ -594,10 +594,19 @@ describe('TapAccess API (e2e)', () => {
           businessName: 'Test Shop',
         }),
       ]);
-      // Nothing beyond what the card page itself shows.
+      // Nothing beyond what the card page itself shows, plus the owner's
+      // review of TapAccess (none here).
       expect(Object.keys(shown.body[0] as object).sort()).toEqual(
-        ['businessName', 'category', 'color', 'logoUrl', 'slug'].sort(),
+        [
+          'businessName',
+          'category',
+          'color',
+          'logoUrl',
+          'review',
+          'slug',
+        ].sort(),
       );
+      expect((shown.body[0] as { review: unknown }).review).toBeNull();
 
       // Inactive cards drop off even when featured.
       await authed(request(http).patch(`/api/admin/cards/${id}/status`))
@@ -950,11 +959,27 @@ describe('TapAccess API (e2e)', () => {
         .expect(200);
     });
 
-    it('a new code or switching off ends the owner session', async () => {
-      const fresh = await authed(
+    it('keeps one code per card; switching off ends the owner session', async () => {
+      // Turning on again (already on) keeps the code and the session.
+      const same = await authed(
         request(http).post(`/api/admin/cards/${cardId}/owner-access`),
       ).expect(201);
-      expect(fresh.body.ownerCode).not.toBe(code);
+      expect(same.body.ownerCode).toBe(code);
+      await request(http)
+        .get('/api/owner/card')
+        .set('Cookie', ownerCookie)
+        .expect(200);
+
+      // The admin can show the code again.
+      const shown = await authed(
+        request(http).get(`/api/admin/cards/${cardId}/owner-access`),
+      ).expect(200);
+      expect(shown.body.code).toBe(code);
+
+      // Off: signed out, and the code no longer signs in.
+      await authed(
+        request(http).delete(`/api/admin/cards/${cardId}/owner-access`),
+      ).expect(200);
       const ended = await request(http)
         .get('/api/owner/card')
         .set('Cookie', ownerCookie)
@@ -964,23 +989,20 @@ describe('TapAccess API (e2e)', () => {
         .post('/api/owner/login')
         .send({ slug: 'e2e-owner', code })
         .expect(401);
-
-      const again = await request(http)
-        .post('/api/owner/login')
-        .send({ slug: 'e2e-owner', code: fresh.body.ownerCode })
-        .expect(200);
-      const second = ownerCookieFrom(again);
-      await authed(
-        request(http).delete(`/api/admin/cards/${cardId}/owner-access`),
-      ).expect(200);
-      await request(http)
-        .get('/api/owner/card')
-        .set('Cookie', second)
-        .expect(401);
       const pub = await request(http)
         .get('/api/public/cards/e2e-owner')
         .expect(200);
       expect(pub.body.ownerEditing).toBe(false);
+
+      // On again: the same code works.
+      const back = await authed(
+        request(http).post(`/api/admin/cards/${cardId}/owner-access`),
+      ).expect(201);
+      expect(back.body.ownerCode).toBe(code);
+      await request(http)
+        .post('/api/owner/login')
+        .send({ slug: 'e2e-owner', code })
+        .expect(200);
     });
   });
 });

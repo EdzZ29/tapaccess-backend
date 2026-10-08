@@ -83,7 +83,15 @@ export class NfcCard {
   @Column({ type: 'varchar', length: 255, nullable: true, select: false })
   ownerCodeHash!: string | null;
 
-  /** Bumped on every new code or switch-off, which signs the owner out. */
+  /**
+   * The same code, encrypted (see SecretBox) so the admin can show it again.
+   * The code is made once per card; turning access off and on keeps it.
+   * Null for codes made before codes could be shown again.
+   */
+  @Column({ type: 'varchar', length: 255, nullable: true, select: false })
+  ownerCodeEncrypted!: string | null;
+
+  /** Bumped on every switch-off (or code replacement), which signs the owner out. */
   @Column({ type: 'int', default: 0 })
   ownerTokenVersion!: number;
 

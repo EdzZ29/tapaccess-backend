@@ -32,7 +32,7 @@ export class OwnerGuard implements CanActivate {
     if (!card) {
       throw new UnauthorizedException({
         message:
-          'Your editing access has ended or the access code was changed. Sign in again with your current code.',
+          'Your editing access was turned off. Ask TapAccess to turn it back on, then sign in again with your access code.',
         code: 'OWNER_SESSION_ENDED',
       });
     }
