@@ -83,6 +83,7 @@ export function toPublicProfile(card: NfcCard, now = new Date()) {
       reviewsUrl: p.reviewsUrl,
     },
     openingHours: p.openingHours,
+    alwaysOpen: p.alwaysOpen,
     hoursNote: p.hoursNote,
     theme,
     tapAction: effectiveTapAction(p.tapAction, p),

@@ -76,6 +76,10 @@ export class CardProfile {
   @Column({ type: 'jsonb' })
   openingHours!: OpeningHoursDay[];
 
+  /** Open 24/7: the weekly hours are kept but not shown. */
+  @Column({ type: 'boolean', default: false })
+  alwaysOpen!: boolean;
+
   @Column({ type: 'varchar', length: 200, nullable: true })
   hoursNote!: string | null;
 

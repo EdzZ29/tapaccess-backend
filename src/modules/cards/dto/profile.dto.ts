@@ -204,6 +204,11 @@ export class ProfileFieldsDto {
   @Type(() => OpeningHoursDayDto)
   openingHours!: OpeningHoursDayDto[];
 
+  /** Open 24/7; optional so older editors keep working. */
+  @IsOptional()
+  @IsBoolean()
+  alwaysOpen: boolean = false;
+
   @CleanOptionalText()
   @ValidateIf((_, v) => v !== null)
   @IsString()

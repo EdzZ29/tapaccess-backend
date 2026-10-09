@@ -105,6 +105,7 @@ export function toCardDetail(
       mapsUrl: p.mapsUrl,
       reviewsUrl: p.reviewsUrl,
       openingHours: p.openingHours,
+      alwaysOpen: p.alwaysOpen,
       hoursNote: p.hoursNote,
       theme: p.theme,
       tapAction: p.tapAction,
