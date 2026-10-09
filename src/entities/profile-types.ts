@@ -19,7 +19,8 @@ export interface ThemeConfig {
   fontBody: ThemeFont;
   buttonStyle: 'solid' | 'soft' | 'outline' | 'glass';
   buttonShape: 'rounded' | 'pill' | 'square';
-  layout: 'classic' | 'centered' | 'minimal';
+  /** "personal": no cover, a large round profile picture centred above the name. */
+  layout: 'classic' | 'centered' | 'minimal' | 'personal';
 }
 
 /**

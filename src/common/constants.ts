@@ -19,7 +19,7 @@ export type ThemeFont = (typeof THEME_FONTS)[number];
 
 export const BUTTON_STYLES = ['solid', 'soft', 'outline', 'glass'] as const;
 export const BUTTON_SHAPES = ['rounded', 'pill', 'square'] as const;
-export const LAYOUTS = ['classic', 'centered', 'minimal'] as const;
+export const LAYOUTS = ['classic', 'centered', 'minimal', 'personal'] as const;
 export const BACKGROUND_STYLES = ['solid', 'gradient', 'image'] as const;
 
 export const BUTTON_ICONS = [
