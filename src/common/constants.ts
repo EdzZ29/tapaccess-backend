@@ -91,4 +91,6 @@ export const LIMITS = {
   buttons: 20,
   socialLinks: 15,
   itemsPerSection: 40,
+  /** Photos in the gallery section (hidden ones included); the card shows at most this many. */
+  galleryPhotos: 8,
 } as const;

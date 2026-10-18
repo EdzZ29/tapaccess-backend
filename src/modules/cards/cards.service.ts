@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { Brackets, DataSource, EntityManager, In, Repository } from 'typeorm';
+import { LIMITS } from '../../common/constants';
 import { paginate } from '../../common/dto/pagination.dto';
 import { ownerAccessAllowed } from '../../common/plans';
 import {
@@ -748,6 +749,14 @@ export class CardsService {
       if (!ITEM_SECTION_TYPES.includes(s.type) && s.items.length > 0) {
         throw new BadRequestException(
           `The ${s.type} section does not hold items`,
+        );
+      }
+      if (
+        s.type === SectionType.Gallery &&
+        s.items.length > LIMITS.galleryPhotos
+      ) {
+        throw new BadRequestException(
+          `A gallery holds up to ${LIMITS.galleryPhotos} photos. Remove ${s.items.length - LIMITS.galleryPhotos}, then save.`,
         );
       }
     }

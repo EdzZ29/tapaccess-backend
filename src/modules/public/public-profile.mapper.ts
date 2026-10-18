@@ -1,7 +1,9 @@
+import { LIMITS } from '../../common/constants';
 import { ownerAccessActive, PLAN_FEATURES } from '../../common/plans';
 import {
   type CardSection,
   ITEM_SECTION_TYPES,
+  SectionType,
   type NfcCard,
   type SectionItem,
   type SocialLink,
@@ -10,6 +12,15 @@ import {
 
 const byPosition = <T extends { position: number }>(a: T, b: T) =>
   a.position - b.position;
+
+/** The gallery shows its first photos only, up to LIMITS.galleryPhotos. */
+const capGallery = <T extends { imageUrl: string | null }>(
+  type: SectionType,
+  items: T[],
+): T[] =>
+  type === SectionType.Gallery
+    ? items.filter((i) => i.imageUrl).slice(0, LIMITS.galleryPhotos)
+    : items;
 
 const isLive = (item: SectionItem, now: Date) =>
   item.enabled &&
@@ -96,20 +107,23 @@ export function toPublicProfile(card: NfcCard, now = new Date()) {
         type: s.type,
         title: s.title,
         items: ITEM_SECTION_TYPES.includes(s.type)
-          ? [...(s.items ?? [])]
-              .filter((i) => isLive(i, now))
-              .sort(byPosition)
-              .map((i) => ({
-                id: i.id,
-                title: i.title,
-                description: i.description,
-                price: i.price,
-                imageUrl: image(i.imageUrl),
-                linkUrl: i.linkUrl,
-                linkLabel: i.linkLabel,
-                badge: i.badge,
-                endsAt: i.endsAt,
-              }))
+          ? capGallery(
+              s.type,
+              [...(s.items ?? [])]
+                .filter((i) => isLive(i, now))
+                .sort(byPosition)
+                .map((i) => ({
+                  id: i.id,
+                  title: i.title,
+                  description: i.description,
+                  price: i.price,
+                  imageUrl: image(i.imageUrl),
+                  linkUrl: i.linkUrl,
+                  linkLabel: i.linkLabel,
+                  badge: i.badge,
+                  endsAt: i.endsAt,
+                })),
+            )
           : [],
       })),
     buttons: [...card.buttons]

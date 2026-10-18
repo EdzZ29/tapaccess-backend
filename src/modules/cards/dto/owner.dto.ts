@@ -73,7 +73,9 @@ export class OwnerGalleryDto {
   enabled!: boolean;
 
   @IsArray()
-  @ArrayMaxSize(LIMITS.itemsPerSection)
+  @ArrayMaxSize(LIMITS.galleryPhotos, {
+    message: `A gallery holds up to ${LIMITS.galleryPhotos} photos. Remove some, then save.`,
+  })
   @ValidateNested({ each: true })
   @Type(() => OwnerGalleryItemDto)
   items!: OwnerGalleryItemDto[];
