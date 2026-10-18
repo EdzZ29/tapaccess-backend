@@ -2,12 +2,15 @@ import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
 
 /**
  * scrypt via Node's built-in crypto (no native add-on to compile on deploy).
- * Parameters follow OWASP guidance (N=2^17, r=8, p=1) and are stored inside
- * the hash string, so they can be raised later without breaking old hashes.
+ * N=2^15, r=8, p=1 is the widely used interactive-login setting (Go's
+ * x/crypto/scrypt recommendation). The earlier N=2^17 took 3+ seconds per
+ * sign-in on a small Render instance. Parameters are stored inside the hash
+ * string, so old hashes keep verifying and are upgraded on the next sign-in
+ * (see needsRehash).
  *
  * Format: scrypt$<N>$<r>$<p>$<salt b64>$<hash b64>
  */
-const N = 2 ** 17;
+const N = 2 ** 15;
 const R = 8;
 const P = 1;
 const KEY_LEN = 64;
@@ -59,6 +62,14 @@ export async function verifyPassword(
     Number(p),
   );
   return actual.length === expected.length && timingSafeEqual(actual, expected);
+}
+
+/** True when a stored hash was made with other parameters than the current ones. */
+export function needsRehash(stored: string): boolean {
+  const [scheme, n, r, p] = stored.split('$');
+  return (
+    scheme !== 'scrypt' || Number(n) !== N || Number(r) !== R || Number(p) !== P
+  );
 }
 
 /** A real hash of a random password, used to equalise timing for unknown emails. */

@@ -1,6 +1,8 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
+  type OnModuleInit,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -11,7 +13,12 @@ import { Repository } from 'typeorm';
 import { type AppConfig, NodeEnv } from '../../config/env';
 import { Admin, AdminRole } from '../../entities';
 import { LoginGuard } from './login-guard';
-import { getDummyHash, hashPassword, verifyPassword } from './password';
+import {
+  getDummyHash,
+  hashPassword,
+  needsRehash,
+  verifyPassword,
+} from './password';
 
 export interface SessionPayload {
   sub: string;
@@ -20,6 +27,12 @@ export interface SessionPayload {
 
 const JWT_ISSUER = 'tapaccess-api';
 const JWT_AUDIENCE = 'tapaccess-admin';
+/**
+ * How long a verified admin row is reused before it is read again. Every
+ * dashboard request is authenticated, so this saves one database round trip
+ * per request. Password changes and renames drop the entry at once.
+ */
+const SESSION_CACHE_MS = 30_000;
 
 export interface AdminView {
   id: string;
@@ -38,7 +51,7 @@ export const toAdminView = (a: Admin): AdminView => ({
 });
 
 @Injectable()
-export class AuthService {
+export class AuthService implements OnModuleInit {
   constructor(
     @InjectRepository(Admin) private readonly admins: Repository<Admin>,
     private readonly jwt: JwtService,
@@ -46,6 +59,17 @@ export class AuthService {
   ) {}
 
   private readonly loginGuard = new LoginGuard();
+  private readonly logger = new Logger(AuthService.name);
+  /** Admins by id, as last read from the database (single API instance). */
+  private readonly sessionCache = new Map<
+    string,
+    { admin: Admin; expiresAt: number }
+  >();
+
+  /** Computes the timing-equaliser hash at startup, not during someone's sign-in. */
+  onModuleInit() {
+    void getDummyHash();
+  }
 
   async login(
     email: string,
@@ -71,8 +95,17 @@ export class AuthService {
     }
     this.loginGuard.recordSuccess(key);
 
+    // Bookkeeping runs after the reply: the admin doesn't wait for it.
     admin.lastLoginAt = new Date();
-    await this.admins.update(admin.id, { lastLoginAt: admin.lastLoginAt });
+    const rehash = needsRehash(admin.passwordHash);
+    void (async () => {
+      await this.admins.update(admin.id, {
+        lastLoginAt: admin.lastLoginAt,
+        ...(rehash ? { passwordHash: await hashPassword(password) } : {}),
+      });
+    })().catch((err: Error) =>
+      this.logger.warn(`Sign-in bookkeeping failed: ${err.message}`),
+    );
     return { admin, token: await this.sign(admin) };
   }
 
@@ -84,7 +117,7 @@ export class AuthService {
         audience: JWT_AUDIENCE,
         algorithms: ['HS256'],
       });
-      const admin = await this.admins.findOneBy({ id: payload.sub });
+      const admin = await this.cachedAdmin(payload.sub);
       if (
         !admin ||
         admin.tokenVersion !== payload.ver ||
@@ -119,12 +152,25 @@ export class AuthService {
     // Bumping the version signs out every other session.
     admin.tokenVersion += 1;
     await this.admins.save(admin);
+    this.sessionCache.delete(adminId);
     return this.sign(admin);
   }
 
   async updateName(adminId: string, name: string): Promise<Admin> {
     await this.admins.update(adminId, { name });
+    this.sessionCache.delete(adminId);
     return this.admins.findOneByOrFail({ id: adminId });
+  }
+
+  private async cachedAdmin(id: string): Promise<Admin | null> {
+    const now = Date.now();
+    const hit = this.sessionCache.get(id);
+    if (hit && hit.expiresAt > now) return hit.admin;
+    const admin = await this.admins.findOneBy({ id });
+    if (admin)
+      this.sessionCache.set(id, { admin, expiresAt: now + SESSION_CACHE_MS });
+    else this.sessionCache.delete(id);
+    return admin;
   }
 
   cookieName(): string {

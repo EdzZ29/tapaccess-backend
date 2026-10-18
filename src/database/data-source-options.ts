@@ -60,6 +60,17 @@ export function buildDataSourceOptions(env: DatabaseEnv): DataSourceOptions {
     namingStrategy: new SnakeNamingStrategy(),
     synchronize: false,
     logging: env.DATABASE_LOGGING ? ['query', 'error'] : ['error'],
-    extra: { max: 10 },
+    extra: {
+      max: 10,
+      // Opening a TLS connection to a hosted database costs several round
+      // trips (well over a second across regions), so keep connections open
+      // instead of pg's default of closing them after 10 s idle. Dead ones
+      // are dropped by the pool and reopened on demand.
+      idleTimeoutMillis: 0,
+      keepAlive: true,
+      // Lets CLI scripts exit once their work is done.
+      allowExitOnIdle: true,
+      connectionTimeoutMillis: 15_000,
+    },
   };
 }

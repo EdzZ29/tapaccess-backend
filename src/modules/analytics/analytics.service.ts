@@ -194,35 +194,36 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
   // ─── Reporting (admin) ────────────────────────────────────────────────────
 
   async overview(days: number, tz: string) {
-    const [totals] = await this.db.query<
-      {
-        allTimeVisits: number;
-        visits: number;
-        uniqueVisitors: number;
-        clicks: number;
-      }[]
-    >(
-      `WITH range AS (SELECT ${rangeStartSql('$2')} AS start)
+    // Independent queries run side by side: one round trip instead of three.
+    const [[totals], series, topCards] = await Promise.all([
+      this.db.query<
+        {
+          allTimeVisits: number;
+          visits: number;
+          uniqueVisitors: number;
+          clicks: number;
+        }[]
+      >(
+        `WITH range AS (SELECT ${rangeStartSql('$2')} AS start)
        SELECT
          (SELECT COUNT(*) FROM card_visits)::int AS "allTimeVisits",
          (SELECT COUNT(*) FROM card_visits, range WHERE visited_at >= range.start)::int AS "visits",
          (SELECT COUNT(DISTINCT (visitor_hash, (visited_at AT TIME ZONE $1)::date))
             FROM card_visits, range WHERE visited_at >= range.start)::int AS "uniqueVisitors",
          (SELECT COUNT(*) FROM button_clicks, range WHERE clicked_at >= range.start)::int AS "clicks"`,
-      [tz, days],
-    );
-
-    const series = await this.dailySeries(days, tz);
-    const topCards = await this.db.query<
-      {
-        cardId: string;
-        slug: string;
-        businessName: string;
-        status: CardStatus;
-        visits: number;
-      }[]
-    >(
-      `WITH range AS (SELECT ${rangeStartSql('$2')} AS start)
+        [tz, days],
+      ),
+      this.dailySeries(days, tz),
+      this.db.query<
+        {
+          cardId: string;
+          slug: string;
+          businessName: string;
+          status: CardStatus;
+          visits: number;
+        }[]
+      >(
+        `WITH range AS (SELECT ${rangeStartSql('$2')} AS start)
        SELECT c.id AS "cardId", c.slug, p.business_name AS "businessName", c.status, COUNT(v.id)::int AS visits
          FROM card_visits v
          JOIN range ON v.visited_at >= range.start
@@ -231,17 +232,31 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
         GROUP BY c.id, p.business_name
         ORDER BY visits DESC
         LIMIT 5`,
-      [tz, days],
-    );
+        [tz, days],
+      ),
+    ]);
 
     return { days, tz, totals, series, topCards };
   }
 
   async cardAnalytics(cardId: string, days: number, tz: string) {
-    if (!(await this.cards.exists({ where: { id: cardId } })))
-      throw new NotFoundException('Card not found');
+    // All reads at once (one round trip); the existence check decides the result.
+    const [exists, [totals], series, clicksByButton, devices, referrers] =
+      await Promise.all([
+        this.cards.exists({ where: { id: cardId } }),
+        this.cardTotals(cardId, days, tz),
+        this.dailySeries(days, tz, cardId),
+        this.cardClicksByButton(cardId, days, tz),
+        this.cardDevices(cardId, days, tz),
+        this.cardReferrers(cardId, days, tz),
+      ]);
+    if (!exists) throw new NotFoundException('Card not found');
 
-    const [totals] = await this.db.query<
+    return { days, tz, totals, series, clicksByButton, devices, referrers };
+  }
+
+  private cardTotals(cardId: string, days: number, tz: string) {
+    return this.db.query<
       {
         allTimeVisits: number;
         visits: number;
@@ -258,11 +273,11 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
          (SELECT COUNT(*) FROM button_clicks, range WHERE card_id = $3 AND clicked_at >= range.start)::int AS "clicks"`,
       [tz, days, cardId],
     );
+  }
 
-    const series = await this.dailySeries(days, tz, cardId);
-
-    // Group custom buttons by id (label may have changed) and built-in actions by target.
-    const clicksByButton = await this.db.query<
+  /** Custom buttons grouped by id (label may have changed), built-in actions by target. */
+  private cardClicksByButton(cardId: string, days: number, tz: string) {
+    return this.db.query<
       {
         key: string;
         kind: ClickKind;
@@ -286,10 +301,10 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
         LIMIT 50`,
       [tz, days, cardId],
     );
+  }
 
-    const devices = await this.db.query<
-      { deviceType: string; visits: number }[]
-    >(
+  private cardDevices(cardId: string, days: number, tz: string) {
+    return this.db.query<{ deviceType: string; visits: number }[]>(
       `WITH range AS (SELECT ${rangeStartSql('$2')} AS start)
        SELECT device_type AS "deviceType", COUNT(*)::int AS visits
          FROM card_visits, range
@@ -297,8 +312,10 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
         GROUP BY device_type ORDER BY visits DESC`,
       [tz, days, cardId],
     );
+  }
 
-    const referrers = await this.db.query<{ host: string; visits: number }[]>(
+  private cardReferrers(cardId: string, days: number, tz: string) {
+    return this.db.query<{ host: string; visits: number }[]>(
       `WITH range AS (SELECT ${rangeStartSql('$2')} AS start)
        SELECT referrer_host AS host, COUNT(*)::int AS visits
          FROM card_visits, range
@@ -306,8 +323,6 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
         GROUP BY referrer_host ORDER BY visits DESC LIMIT 10`,
       [tz, days, cardId],
     );
-
-    return { days, tz, totals, series, clicksByButton, devices, referrers };
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────

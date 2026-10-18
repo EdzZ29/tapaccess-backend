@@ -27,6 +27,7 @@ import {
   DEFAULT_OPENING_HOURS,
   DEFAULT_THEME,
   ITEM_SECTION_TYPES,
+  MediaAsset,
   NfcCard,
   SectionItem,
   SectionType,
@@ -42,7 +43,7 @@ import {
   ListCardsQueryDto,
   UpdateCardDto,
 } from './dto/card.dto';
-import { SaveOwnerLinksDto } from './dto/owner.dto';
+import { OwnerGalleryDto, SaveOwnerCardDto } from './dto/owner.dto';
 import { SaveProfileDto } from './dto/profile.dto';
 
 const FULL_RELATIONS = {
@@ -105,12 +106,21 @@ export class CardsService {
       );
     }
 
-    const [rows, total] = await qb
-      .orderBy(SORT_COLUMNS[query.sort], query.order === 'asc' ? 'ASC' : 'DESC')
-      .addOrderBy('card.id', 'ASC')
-      .skip((query.page - 1) * query.pageSize)
-      .take(query.pageSize)
-      .getManyAndCount();
+    // The profile join is one-to-one, so plain OFFSET/LIMIT is exact and
+    // avoids TypeORM's extra "distinct ids" query; the count runs alongside.
+    const [rows, total] = await Promise.all([
+      qb
+        .clone()
+        .orderBy(
+          SORT_COLUMNS[query.sort],
+          query.order === 'asc' ? 'ASC' : 'DESC',
+        )
+        .addOrderBy('card.id', 'ASC')
+        .offset((query.page - 1) * query.pageSize)
+        .limit(query.pageSize)
+        .getMany(),
+      qb.getCount(),
+    ]);
 
     const counts = await this.visitCounts(rows.map((r) => r.id));
     return paginate(
@@ -121,21 +131,23 @@ export class CardsService {
   }
 
   async stats() {
-    const rows = await this.cards
-      .createQueryBuilder('card')
-      .select('card.status', 'status')
-      .addSelect('COUNT(*)::int', 'count')
-      .groupBy('card.status')
-      .getRawMany<{ status: CardStatus; count: number }>();
+    const [rows, plans, totalVisits] = await Promise.all([
+      this.cards
+        .createQueryBuilder('card')
+        .select('card.status', 'status')
+        .addSelect('COUNT(*)::int', 'count')
+        .groupBy('card.status')
+        .getRawMany<{ status: CardStatus; count: number }>(),
+      this.cards
+        .createQueryBuilder('card')
+        .select('card.plan', 'plan')
+        .addSelect('COUNT(*)::int', 'count')
+        .where('card.status != :archived', { archived: CardStatus.Archived })
+        .groupBy('card.plan')
+        .getRawMany<{ plan: CardPlan; count: number }>(),
+      this.visits.count(),
+    ]);
     const by = (s: CardStatus) => rows.find((r) => r.status === s)?.count ?? 0;
-    const plans = await this.cards
-      .createQueryBuilder('card')
-      .select('card.plan', 'plan')
-      .addSelect('COUNT(*)::int', 'count')
-      .where('card.status != :archived', { archived: CardStatus.Archived })
-      .groupBy('card.plan')
-      .getRawMany<{ plan: CardPlan; count: number }>();
-    const totalVisits = await this.visits.count();
     const active = by(CardStatus.Active);
     const inactive = by(CardStatus.Inactive);
     return {
@@ -154,12 +166,14 @@ export class CardsService {
   }
 
   async get(id: string) {
-    const card = await this.findFull(id);
-    const counts = await this.visitCounts([id]);
-    const oldSlugs = await this.db.getRepository(CardSlugRedirect).find({
-      where: { cardId: id },
-      order: { createdAt: 'DESC' },
-    });
+    const [card, counts, oldSlugs] = await Promise.all([
+      this.findFull(id),
+      this.visitCounts([id]),
+      this.db.getRepository(CardSlugRedirect).find({
+        where: { cardId: id },
+        order: { createdAt: 'DESC' },
+      }),
+    ]);
     return toCardDetail(
       card,
       counts.get(id) ?? 0,
@@ -377,7 +391,7 @@ export class CardsService {
   async saveProfile(id: string, dto: SaveProfileDto) {
     const card = await this.findFull(id);
     this.assertUniqueSectionTypes(dto);
-    // The editor saves buttons and links too, so it must not silently undo
+    // The editor saves everything the owner can edit too, so it must not silently undo
     // changes the card's owner made after the editor was opened.
     if (
       dto.baseOwnerEditAt !== undefined &&
@@ -387,7 +401,7 @@ export class CardsService {
     ) {
       throw new ConflictException({
         message:
-          'The card owner changed their buttons or social links after you opened this editor. Reload the editor to see their changes, then make your edits again.',
+          'The card owner changed their card after you opened this editor. Reload the editor to see their changes, then make your edits again.',
         code: 'OWNER_EDITED',
       });
     }
@@ -548,14 +562,52 @@ export class CardsService {
   }
 
   /**
-   * The owner's save: replaces only the card's CTA buttons and social links
-   * (row ids kept, so click stats survive). The matching sections are
-   * switched on when there's something to show, so the owner's links
-   * actually appear.
+   * The owner's save: their profile text, logo and cover, the theme (without
+   * button style, shape and layout), the photo gallery, CTA buttons and
+   * social links. Row ids are kept, so click stats survive. The matching
+   * sections are switched on when there's something to show, so the owner's
+   * links actually appear.
    */
-  async saveOwnerLinks(id: string, dto: SaveOwnerLinksDto) {
+  async saveOwnerCard(id: string, dto: SaveOwnerCardDto) {
     const card = await this.findFull(id);
+    if (
+      dto.baseUpdatedAt &&
+      card.updatedAt.getTime() !== dto.baseUpdatedAt.getTime()
+    ) {
+      throw new ConflictException({
+        message:
+          'TapAccess updated your card after you opened this editor. Reload the page to see the latest version, then make your changes again.',
+        code: 'CARD_CHANGED',
+      });
+    }
+    await this.assertOwnerImages(card, dto);
+
     await this.db.transaction(async (m) => {
+      if (dto.profile || dto.theme) {
+        const current = card.profile.theme;
+        await m.update(
+          CardProfile,
+          { id: card.profile.id },
+          {
+            ...(dto.profile ?? {}),
+            ...(dto.theme
+              ? {
+                  theme: {
+                    ...current,
+                    ...dto.theme,
+                    // Never the owner's to change.
+                    buttonStyle: current.buttonStyle,
+                    buttonShape: current.buttonShape,
+                    layout: current.layout,
+                  },
+                }
+              : {}),
+          },
+        );
+      }
+
+      if (dto.gallery) await this.saveOwnerGallery(m, card, dto.gallery);
+
       await this.syncRows(
         m,
         CardButton,
@@ -585,6 +637,81 @@ export class CardsService {
       await m.update(NfcCard, { id }, { updatedAt: now, ownerLastEditAt: now });
     });
     return this.ownerView(id);
+  }
+
+  /** The card's gallery section (created if missing) and its photos. */
+  private async saveOwnerGallery(
+    m: EntityManager,
+    card: NfcCard,
+    gallery: OwnerGalleryDto,
+  ) {
+    let section = card.sections.find((s) => s.type === SectionType.Gallery);
+    if (section) {
+      await m.update(
+        CardSection,
+        { id: section.id },
+        { title: gallery.title, enabled: gallery.enabled },
+      );
+    } else {
+      section = await m.save(
+        m.create(CardSection, {
+          cardId: card.id,
+          type: SectionType.Gallery,
+          title: gallery.title,
+          enabled: gallery.enabled,
+          position: Math.max(-1, ...card.sections.map((s) => s.position)) + 1,
+        }),
+      );
+    }
+    const sectionId = section.id;
+    await this.syncRows(
+      m,
+      SectionItem,
+      section.items ?? [],
+      gallery.items,
+      (row, position) => ({
+        title: row.title,
+        imageUrl: row.imageUrl,
+        enabled: row.enabled,
+        sectionId,
+        position,
+      }),
+    );
+  }
+
+  /**
+   * Owners may only use images uploaded for their own card (or already on
+   * it), never another card's files, even though those URLs are public.
+   */
+  private async assertOwnerImages(card: NfcCard, dto: SaveOwnerCardDto) {
+    const wanted = new Set(
+      [
+        dto.profile?.logoUrl,
+        dto.profile?.coverUrl,
+        dto.theme?.backgroundImageUrl,
+        ...(dto.gallery?.items.map((i) => i.imageUrl) ?? []),
+      ].filter((u): u is string => !!u),
+    );
+    const onCard = new Set(
+      [
+        card.profile.logoUrl,
+        card.profile.coverUrl,
+        card.profile.theme.backgroundImageUrl,
+        ...card.sections.flatMap((s) => (s.items ?? []).map((i) => i.imageUrl)),
+      ].filter((u): u is string => !!u),
+    );
+    const unknown = [...wanted].filter((u) => !onCard.has(u));
+    if (unknown.length === 0) return;
+    const owned = await this.db
+      .getRepository(MediaAsset)
+      .count({ where: { cardId: card.id, url: In(unknown) } });
+    if (owned !== unknown.length) {
+      throw new BadRequestException({
+        message:
+          "One of the images wasn't uploaded for this card. Upload it again, then save.",
+        code: 'IMAGE_NOT_OWNED',
+      });
+    }
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────

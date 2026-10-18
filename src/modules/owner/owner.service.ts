@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { CookieOptions } from 'express';
@@ -8,7 +8,12 @@ import { normalizeOwnerCode } from '../../common/utils/owner-code';
 import { NfcCard } from '../../entities';
 import { AuthService } from '../auth/auth.service';
 import { LoginGuard } from '../auth/login-guard';
-import { getDummyHash, verifyPassword } from '../auth/password';
+import {
+  getDummyHash,
+  hashPassword,
+  needsRehash,
+  verifyPassword,
+} from '../auth/password';
 
 interface OwnerPayload {
   sub: string;
@@ -22,13 +27,14 @@ const SESSION_DAYS = 30;
 
 /**
  * Sign-in for card owners. The admin hands the owner an access code; with it
- * they can edit only their own card's buttons and social links. Sessions end
- * when the admin switches access off, archives the card
- * or moves it off the Business package.
+ * they can edit only their own card's profile, gallery, buttons, links and
+ * theme colours and fonts. Sessions end when the admin switches access off,
+ * archives the card or moves it off the Business package.
  */
 @Injectable()
 export class OwnerService {
   private readonly loginGuard = new LoginGuard();
+  private readonly logger = new Logger(OwnerService.name);
 
   constructor(
     @InjectRepository(NfcCard) private readonly cards: Repository<NfcCard>,
@@ -64,6 +70,19 @@ export class OwnerService {
       });
     }
     this.loginGuard.recordSuccess(key);
+
+    // Move codes hashed with older, slower settings to the current ones,
+    // after the reply. Only if the code wasn't changed in the meantime.
+    if (needsRehash(hash)) {
+      void (async () => {
+        await this.cards.update(
+          { id: card.id, ownerCodeHash: hash },
+          { ownerCodeHash: await hashPassword(normalizeOwnerCode(code)) },
+        );
+      })().catch((err: Error) =>
+        this.logger.warn(`Access code rehash failed: ${err.message}`),
+      );
+    }
 
     const payload: OwnerPayload = { sub: card.id, ver: card.ownerTokenVersion };
     const token = await this.jwt.signAsync(payload, {

@@ -71,7 +71,8 @@ export class CardsController {
   }
 
   /**
-   * Business cards: lets the owner edit their own buttons and social links.
+   * Business cards: lets the owner edit their own profile, gallery, buttons,
+   * links and theme colours.
    * Turns access on and returns the card's access code, made once per card
    * and kept when access is turned off and on again.
    */

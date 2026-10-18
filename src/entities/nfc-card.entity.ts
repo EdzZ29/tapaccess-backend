@@ -73,7 +73,7 @@ export class NfcCard {
 
   /**
    * Owner access (Business package): the card's owner may edit their own
-   * CTA buttons and social links after signing in with an access code the
+   * profile, gallery, buttons, links and theme colours after signing in with an access code the
    * admin gives them. Only effective while the card is on Business.
    */
   @Column({ type: 'boolean', default: false })

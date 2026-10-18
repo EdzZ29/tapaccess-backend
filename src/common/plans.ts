@@ -49,7 +49,7 @@ export const PLAN_FEATURES: Record<CardPlan, PlanFeatures> = {
   },
 };
 
-/** Owner self-editing (CTA buttons + social links) is a Business feature. */
+/** Owner self-editing (profile, gallery, buttons, links, theme colours) is a Business feature. */
 export const ownerAccessAllowed = (plan: CardPlan) =>
   plan === CardPlan.Business;
 

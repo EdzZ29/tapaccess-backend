@@ -87,7 +87,7 @@ export function toPublicProfile(card: NfcCard, now = new Date()) {
     hoursNote: p.hoursNote,
     theme,
     tapAction: effectiveTapAction(p.tapAction, p),
-    /** Shows the owner's "Edit my links" button. */
+    /** Shows the owner's "Edit my card" menu item. */
     ownerEditing: ownerAccessActive(card),
     sections: [...card.sections]
       .filter(showSection)

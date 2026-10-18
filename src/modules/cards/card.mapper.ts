@@ -1,6 +1,7 @@
 import { ownerAccessActive } from '../../common/plans';
 import type {
   CardButton,
+  CardProfile,
   CardSection,
   NfcCard,
   SectionItem,
@@ -77,39 +78,41 @@ const social = (l: SocialLink) => ({
   enabled: l.enabled,
 });
 
+/** All profile fields, as both editors load them. */
+const profileView = (p: CardProfile) => ({
+  businessName: p.businessName,
+  tagline: p.tagline,
+  description: p.description,
+  category: p.category,
+  logoUrl: p.logoUrl,
+  coverUrl: p.coverUrl,
+  phone: p.phone,
+  phoneLabel: p.phoneLabel,
+  extraPhones: p.extraPhones ?? [],
+  whatsapp: p.whatsapp,
+  email: p.email,
+  website: p.website,
+  address: p.address,
+  mapsUrl: p.mapsUrl,
+  reviewsUrl: p.reviewsUrl,
+  openingHours: p.openingHours,
+  alwaysOpen: p.alwaysOpen,
+  hoursNote: p.hoursNote,
+  theme: p.theme,
+  tapAction: p.tapAction,
+});
+
 /** Everything the admin editor needs, including disabled content. */
 export function toCardDetail(
   card: NfcCard,
   visitCount = 0,
   oldSlugs: string[] = [],
 ) {
-  const p = card.profile;
   return {
     ...toCardSummary(card, visitCount),
     /** Previous addresses that forward to this card. */
     oldSlugs,
-    profile: {
-      businessName: p.businessName,
-      tagline: p.tagline,
-      description: p.description,
-      category: p.category,
-      logoUrl: p.logoUrl,
-      coverUrl: p.coverUrl,
-      phone: p.phone,
-      phoneLabel: p.phoneLabel,
-      extraPhones: p.extraPhones ?? [],
-      whatsapp: p.whatsapp,
-      email: p.email,
-      website: p.website,
-      address: p.address,
-      mapsUrl: p.mapsUrl,
-      reviewsUrl: p.reviewsUrl,
-      openingHours: p.openingHours,
-      alwaysOpen: p.alwaysOpen,
-      hoursNote: p.hoursNote,
-      theme: p.theme,
-      tapAction: p.tapAction,
-    },
+    profile: profileView(card.profile),
     sections: [...(card.sections ?? [])].sort(byPosition).map(section),
     buttons: [...(card.buttons ?? [])].sort(byPosition).map(button),
     socialLinks: [...(card.socialLinks ?? [])].sort(byPosition).map(social),
@@ -119,8 +122,9 @@ export function toCardDetail(
 export type CardDetail = ReturnType<typeof toCardDetail>;
 
 /**
- * What a card's owner sees in their self-service editor: only the parts
- * they may change, plus enough context to show which card it is.
+ * What a card's owner sees in their self-service editor: their own card's
+ * public content (for the live preview) and the parts they may change. No
+ * admin notes, codes or analytics.
  */
 export function toOwnerView(card: NfcCard) {
   return {
@@ -128,6 +132,10 @@ export function toOwnerView(card: NfcCard) {
     businessName: card.profile?.businessName ?? '',
     plan: card.plan,
     lastEditAt: card.ownerLastEditAt,
+    /** Sent back with a save, so changes TapAccess made since aren't overwritten. */
+    updatedAt: card.updatedAt,
+    profile: profileView(card.profile),
+    sections: [...(card.sections ?? [])].sort(byPosition).map(section),
     buttons: [...(card.buttons ?? [])].sort(byPosition).map(button),
     socialLinks: [...(card.socialLinks ?? [])].sort(byPosition).map(social),
   };

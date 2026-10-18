@@ -7,15 +7,20 @@ import {
   Put,
   Req,
   Res,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import { Type } from 'class-transformer';
-import { IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { IsIn, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 import type { Response } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
 import { CardsService } from '../cards/cards.service';
-import { SaveOwnerLinksDto } from '../cards/dto/owner.dto';
+import { MediaKind } from '../../entities';
+import { SaveOwnerCardDto } from '../cards/dto/owner.dto';
+import { MediaService } from '../media/media.service';
 import { OwnerGuard, type OwnerRequest } from './owner.guard';
 import { OwnerService } from './owner.service';
 
@@ -30,10 +35,24 @@ class OwnerLoginDto {
   code!: string;
 }
 
+/** The kinds of image an owner can upload: what their editor lets them change. */
+const OWNER_MEDIA_KINDS = [
+  MediaKind.Logo,
+  MediaKind.Cover,
+  MediaKind.Background,
+  MediaKind.Gallery,
+] as const;
+
+class OwnerUploadDto {
+  @IsIn(OWNER_MEDIA_KINDS, { message: 'Unsupported image type' })
+  kind!: (typeof OWNER_MEDIA_KINDS)[number];
+}
+
 /**
  * Self-service for card owners (Business package). Not admin routes: they
  * skip the admin guard (`@Public`) and use the owner session instead, which
- * only ever reaches the owner's own card, and only its buttons and links.
+ * only ever reaches the owner's own card: its profile text, logo and cover,
+ * theme colours and fonts, photo gallery, buttons and links.
  */
 @Public()
 @Controller('owner')
@@ -41,6 +60,7 @@ export class OwnerController {
   constructor(
     private readonly owners: OwnerService,
     private readonly cards: CardsService,
+    private readonly media: MediaService,
   ) {}
 
   /** 5 attempts per minute and 20 per hour per IP, plus a per-card lockout. */
@@ -75,7 +95,23 @@ export class OwnerController {
   @UseGuards(OwnerGuard)
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Put('card')
-  save(@Req() req: OwnerRequest, @Body() dto: SaveOwnerLinksDto) {
-    return this.cards.saveOwnerLinks(req.ownerCard!.id, dto);
+  save(@Req() req: OwnerRequest, @Body() dto: SaveOwnerCardDto) {
+    return this.cards.saveOwnerCard(req.ownerCard!.id, dto);
+  }
+
+  /**
+   * multipart/form-data with `file` and `kind`. Always stored under the
+   * owner's own card; the image only appears on the card once they save.
+   */
+  @UseGuards(OwnerGuard)
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @Post('media')
+  @UseInterceptors(FileInterceptor('file'))
+  upload(
+    @Req() req: OwnerRequest,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Body() dto: OwnerUploadDto,
+  ) {
+    return this.media.upload(file, dto.kind, req.ownerCard!.id);
   }
 }
