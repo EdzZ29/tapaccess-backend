@@ -5,6 +5,8 @@ export enum AdminRole {
 /** The package sold with the card; decides what the public page may show. */
 export enum CardPlan {
   Starter = 'starter',
+  /** A personal business card: one person, their photo, contacts and socials. */
+  Personal = 'personal',
   Business = 'business',
 }
 

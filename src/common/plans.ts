@@ -41,6 +41,20 @@ export const PLAN_FEATURES: Record<CardPlan, PlanFeatures> = {
     ],
     alwaysOn: [SectionType.Contact, SectionType.Social],
   },
+  // Personal: a personal business card for one person. Starter's sections
+  // plus a profile picture and every social network; no business sections
+  // (services, products, hours, map...).
+  [CardPlan.Personal]: {
+    images: true,
+    socialPlatforms: 'all',
+    sections: [
+      SectionType.Actions,
+      SectionType.About,
+      SectionType.Contact,
+      SectionType.Social,
+    ],
+    alwaysOn: [SectionType.Contact, SectionType.Social],
+  },
   [CardPlan.Business]: {
     images: true,
     socialPlatforms: 'all',

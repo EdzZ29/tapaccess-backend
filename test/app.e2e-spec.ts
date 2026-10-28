@@ -359,6 +359,36 @@ describe('TapAccess API (e2e)', () => {
       expect(business.body.socialLinks).toHaveLength(3);
     });
 
+    it('applies the Personal package: photo and every social, no business sections', async () => {
+      await authed(request(http).patch(`/api/admin/cards/${cardId}`))
+        .send({ plan: 'personal' })
+        .expect(200);
+      const personal = await request(http)
+        .get('/api/public/cards/e2e-shop')
+        .expect(200);
+      expect(personal.body.logoUrl).toBe('/uploads/cards/x/logo/a.webp');
+      expect(personal.body.socialLinks).toHaveLength(3);
+      expect(
+        personal.body.sections.map((s: { type: string }) => s.type).sort(),
+      ).toEqual(['about', 'actions', 'contact', 'social']);
+
+      await authed(request(http).patch(`/api/admin/cards/${cardId}`))
+        .send({ plan: 'business' })
+        .expect(200);
+    });
+
+    it('starts a new Personal card on the personal layout', async () => {
+      const { body } = await authed(request(http).post('/api/admin/cards'))
+        .send({
+          businessName: 'E2E Person',
+          slug: 'e2e-personal',
+          plan: 'personal',
+        })
+        .expect(201);
+      expect(body.plan).toBe('personal');
+      expect(body.profile.theme.layout).toBe('personal');
+    });
+
     it('blocks state-changing requests from foreign origins', () =>
       authed(request(http).patch(`/api/admin/cards/${cardId}/status`))
         .set('Origin', 'https://evil.example')

@@ -231,7 +231,11 @@ export class CardsService {
           businessName: dto.businessName,
           category: dto.category ?? null,
           openingHours: DEFAULT_OPENING_HOURS,
-          theme: DEFAULT_THEME,
+          // A personal card starts on the layout built for a person.
+          theme:
+            dto.plan === CardPlan.Personal
+              ? { ...DEFAULT_THEME, layout: 'personal' }
+              : DEFAULT_THEME,
         }),
       );
       await m.save(
